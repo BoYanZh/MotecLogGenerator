@@ -1,7 +1,8 @@
-import cantools
 import math
 
+
 class DataLog(object):
+    channels: dict[str, Channel]
     """ Container for storing log data which contains a set of channels with time series data."""
     def __init__(self, name=""):
         self.name = name
@@ -96,8 +97,8 @@ class DataLog(object):
             return
 
         # Get the channel names, ignore the first column as it is assumed to be time
-        header = log_lines[0]
-        channel_names = header.split(",")[1:]
+        header = log_lines[0].strip("\n")
+        channel_names = [name.strip().strip('"').strip("'") for name in header.split(",")[1:]]
 
         # We'll keep a map of names and column numbers for easy channel lookups when parsing rows
         i = 0
@@ -138,6 +139,165 @@ class DataLog(object):
             for name in invalid_channels:
                 del channel_dict[name]
                 del self.channels[name]
+
+    def from_racechrono_log(self, log_lines):
+        """ Creates channels populated with messages from a RaceChrono CSV log file.
+
+        This maps standard RaceChrono columns to MoTeC-compatible names and units.
+        
+        log_lines: List, containing CSV log lines
+        """
+        self.clear()
+
+        if not log_lines:
+            return
+
+        # Find the header row (typically starts with "Time (s)" or "timestamp")
+        header_idx = -1
+        for i, line in enumerate(log_lines):
+            line_clean = line.strip().strip('"').strip("'")
+            if line_clean.lower().startswith("time (s)") or line_clean.lower().startswith("timestamp"):
+                header_idx = i
+                break
+
+        if header_idx == -1:
+            print("ERROR: Could not find 'Time (s)' or 'timestamp' column in RaceChrono log.")
+            return
+
+        header = log_lines[header_idx].strip("\n")
+        # Split and strip any quotes from header names
+        raw_headers = [h.strip().strip('"').strip("'") for h in header.split(",")]
+
+        channel_names = raw_headers[1:]
+
+        # Base mapping from typical RaceChrono columns to MoTeC terminology and units.
+        rc_to_motec_map = {
+            "lap_number": {"name": "Lap Number", "units": ""},
+            "elapsed_time": {"name": "Running Time", "units": "s"},
+            "distance_traveled": {"name": "Corr Dist", "units": "m"},
+            "accuracy": {"name": "GPS Accuracy", "units": "m"},
+            "altitude": {"name": "GPS Altitude", "units": "m"},
+            "bearing": {"name": "GPS Heading", "units": "deg"},
+            "device_battery_level": {"name": "Device Battery", "units": "%"},
+            "fix_type": {"name": "GPS Fix", "units": ""},
+            "latitude": {"name": "Real GPS Latitude", "units": "deg"},
+            "longitude": {"name": "Real GPS Longitude", "units": "deg"},
+            "satellites": {"name": "GPS Satellites", "units": ""},
+            "speed": {"name": "Ground Speed", "units": "km/h"},
+            "combined_acc": {"name": "G Force Combined", "units": "G"},
+            "lateral_acc": {"name": "CG Accel Lateral", "units": "G"},
+            "lean_angle": {"name": "Lean Angle", "units": "deg"},
+            "longitudinal_acc": {"name": "CG Accel Longitudinal", "units": "G"},
+            "accelerator_pos": {"name": "Throttle Pos", "units": "%"},
+            "brake_pos": {"name": "Brake Pos", "units": "%"},
+            "brake_pressure": {"name": "Brake Press", "units": "kPa"},
+            "coolant_temp": {"name": "Coolant Temp", "units": "C"},
+            "engine_oil_temp": {"name": "Engine Oil Temp", "units": "C"},
+            "rpm": {"name": "Engine RPM", "units": "rpm"},
+            "steering_angle": {"name": "Steering Angle", "units": "deg"},
+            "y_rate_of_rotation": {"name": "Chassis Yaw Rate", "units": "deg/s"},
+        }
+
+        # Explicitly ignore uncalibrated raw IMU channels
+        ignored_columns = {"x_acc", "y_acc", "z_acc"}
+
+        active_columns = []
+        lap_number_idx = -1
+        for i, raw_name in enumerate(channel_names):
+            if not raw_name or raw_name in ignored_columns:
+                continue
+
+            if raw_name == "lap_number":
+                lap_number_idx = i + 1
+
+            if raw_name in rc_to_motec_map:
+                motec_name = rc_to_motec_map[raw_name]["name"]
+                motec_units = rc_to_motec_map[raw_name]["units"]
+            else:
+                # Fallback to general parsing if no exact map is found
+                if " (" in raw_name and raw_name.endswith(")"):
+                    motec_name, motec_units = raw_name.rsplit(" (", 1)
+                    motec_units = motec_units[:-1]
+                else:
+                    motec_name = raw_name
+                    motec_units = ""
+
+            if motec_name not in self.channels:
+                self.add_channel(motec_name, motec_units, float, 0)
+                active_columns.append((i, motec_name, raw_name))
+
+        # First pass to find the most frequent lap number
+        lap_counts = {}
+        valid_lines = []
+        for line in log_lines[header_idx + 1:]:
+            line_clean = line.strip("\n")
+            if not line_clean:
+                continue
+
+            # Skip unit rows (typically right after headers and start with empty timestamp or strings)
+            values = line_clean.split(",")
+            if not values[0]:
+                continue
+
+            try:
+                float(values[0])
+            except ValueError:
+                continue
+
+            valid_lines.append(values)
+
+            if lap_number_idx != -1 and lap_number_idx < len(values):
+                lap_val = values[lap_number_idx].strip().strip('"').strip("'")
+                if lap_val:
+                    lap_counts[lap_val] = lap_counts.get(lap_val, 0) + 1
+
+        target_lap = None
+        if lap_counts:
+            target_lap = max(lap_counts, key=lap_counts.get)
+
+        for values in valid_lines:
+            if target_lap is not None and lap_number_idx != -1 and lap_number_idx < len(values):
+                lap_val = values[lap_number_idx].strip().strip('"').strip("'")
+                if lap_val != target_lap:
+                    continue
+
+            try:
+                t = float(values[0])
+            except ValueError:
+                continue
+
+            for col_idx, name, raw_name in active_columns:
+                if col_idx + 1 >= len(values):
+                    continue
+
+                val_str = values[col_idx + 1].strip().strip('"').strip("'")
+                if not val_str:
+                    continue
+
+                try:
+                    val = float(val_str)
+
+                    # Convert speed from m/s to km/h
+                    if raw_name == "speed":
+                        val *= 3.6
+                    elif raw_name == "y_rate_of_rotation":
+                        val *= -1.0
+                    elif raw_name == "steering_angle":
+                        val *= -1.0
+
+                    message = Message(t, val)
+                    self.channels[name].messages.append(message)
+
+                    val_text_split = val_str.split(".")
+                    decimals_present = 0 if len(val_text_split) == 1 else len(val_text_split[1])
+                    self.channels[name].decimals = max(decimals_present, self.channels[name].decimals)
+                except ValueError:
+                    pass
+
+        # Cleanup channels without any data
+        empty_channels = [name for name, ch in self.channels.items() if not ch.messages]
+        for name in empty_channels:
+            del self.channels[name]
 
     def from_accessport_log(self, log_lines):
         """ Creates channels populated with messages from a COBB Accessport CSV log file.
@@ -189,7 +349,7 @@ class DataLog(object):
 class Channel(object):
     """ Represents a singe channel of data containing a time series of values."""
     def __init__(self, name, units, data_type, decimals, messages=None):
-        self.name = str(name)
+        self.name = str(name).strip()
         self.units = str(units)
         self.data_type = data_type
         self.decimals = decimals

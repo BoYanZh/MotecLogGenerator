@@ -1,8 +1,11 @@
 import datetime
-import numpy as np
 import struct
-from data_log import DataLog, Message, Channel
-from ldparser.ldparser import ldVehicle, ldVenue, ldEvent, ldHead, ldChan, ldData
+
+import numpy as np
+
+from data_log import Channel, DataLog, Message
+from ldparser.ldparser import ldChan, ldData, ldEvent, ldHead, ldVehicle, ldVenue
+
 
 class MotecLog(object):
     """ Handles generating a MoTeC .ld file from log data.
@@ -21,6 +24,8 @@ class MotecLog(object):
     HEADER_PTR = 11336
 
     CHANNEL_HEADER_SIZE = struct.calcsize(ldChan.fmt)
+
+    ld_channels: list[ldChan]
 
     def __init__(self):
         self.driver = ""
@@ -51,10 +56,9 @@ class MotecLog(object):
             self.VENUE_PTR, ld_venue)
 
         self.ld_header = ldHead(self.HEADER_PTR, self.HEADER_PTR, self.EVENT_PTR, ld_event, \
-            self.driver, self.vehicle_id, self.venue_name, self.datetime, self.short_comment, \
-            self.event_name, self.event_session)
+            self.driver, self.vehicle_id, self.venue_name, self.datetime, self.short_comment)
 
-    def add_channel(self, log_channel):
+    def add_channel(self, log_channel: Channel):
         """ Adds a single channel of data to the motec log.
 
         log_channel: data_log.Channel
@@ -81,7 +85,7 @@ class MotecLog(object):
         # Channel specs
         data_len = len(log_channel.messages)
         data_type = np.float32 if log_channel.data_type is float else np.int32
-        freq = int(log_channel.avg_frequency())
+        freq = int(round(log_channel.avg_frequency()))
         shift = 0
         multiplier = 1
         scale = 1
