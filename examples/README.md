@@ -23,9 +23,18 @@ python3 ../motec_log_generator.py csv_sample.csv CSV
 
 ## Accessport
 Files:
-* `accessport_sample.log`
+* `accessport_sample.csv`
 
 Usage:
 ```bash
 python3 ../motec_log_generator.py accessport_sample.csv ACCESSPORT
+```
+
+## RaceChrono
+Files:
+* `racechrono_sample.csv`
+
+Usage:
+```bash
+python3 ../motec_log_generator.py racechrono_sample.csv RACECHRONO
 ```
