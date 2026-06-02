@@ -195,7 +195,7 @@ class DataLog(object):
             "engine_oil_temp": {"name": "Engine Oil Temp", "units": "C"},
             "rpm": {"name": "Engine RPM", "units": "rpm"},
             "steering_angle": {"name": "Steering Angle", "units": "deg"},
-            "y_rate_of_rotation": {"name": "Chassis Yaw Rate", "units": "deg/s"},
+            "yaw_rate": {"name": "Chassis Yaw Rate", "units": "deg/s"},
         }
 
         # Explicitly ignore uncalibrated raw IMU channels
@@ -280,7 +280,7 @@ class DataLog(object):
                     # Convert speed from m/s to km/h
                     if raw_name == "speed":
                         val *= 3.6
-                    elif raw_name == "y_rate_of_rotation":
+                    elif raw_name == "yaw_rate":
                         val *= -1.0
                     elif raw_name == "steering_angle":
                         val *= -1.0
