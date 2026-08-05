@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
     parser.add_argument("log", type=str, help="Path to logfile")
     parser.add_argument("log_type", type=str, help="Type of log to process", \
-        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO"])
+        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO", "RCZ"])
 
     parser.add_argument("--output", type=str, \
         help="Name of output file, defaults to the same filename as 'log'")
@@ -39,6 +39,9 @@ if __name__ == '__main__':
         help="Fixed frequency to resample all channels at")
     parser.add_argument("--dbc", type=str, help="Path to DBC file, required if log type CAN")
 
+    parser.add_argument("--lap", type=str, default="all", help="Specific lap number to export (e.g. 1, 15) or 'all' to export all laps. Default is 'all'")
+    parser.add_argument("--stint", type=str, default="all", help="RCZ sessionResume stint to export")
+    parser.add_argument("--min_lap_sec", type=float, default=15.0, help="Minimum valid lap duration in seconds to filter noise (default: 15.0)")
     parser.add_argument("--driver", type=str, default="", help="Motec log metadata field")
     parser.add_argument("--vehicle_id", type=str, default="", help="Motec log metadata field")
     parser.add_argument("--vehicle_weight", type=int, default=0, help="Motec log metadata field")
@@ -58,6 +61,10 @@ if __name__ == '__main__':
     if args.output:
         args.output = os.path.expanduser(args.output)
 
+    # Auto-detect RCZ log_type from extension if applicable
+    if args.log.lower().endswith(".rcz") and args.log_type != "RCZ":
+        args.log_type = "RCZ"
+
     # Make sure our input files are valid
     if not os.path.isfile(args.log):
         print("ERROR: log file %s does not exist" % args.log)
@@ -67,14 +74,58 @@ if __name__ == '__main__':
         print("ERROR: DBC file %s does not exist" % args.dbc)
         exit(1)
 
-    print("Loading log...")
-    with open(args.log, "r") as file:
-        lines = file.readlines()
+    # Auto-detect multi-stint RCZ files and automatically split them if stint=='all'
+    if args.log_type == "RCZ" and str(args.stint).lower() == "all":
+        import zipfile
+        import json
+        import sys
+        import subprocess
 
+        try:
+            with zipfile.ZipFile(args.log, 'r') as z:
+                if "session.json" in z.namelist():
+                    session_json = json.loads(z.read("session.json").decode("utf-8"))
+                    laps = session_json.get("laps", [])
+                    stints = sorted(list(set(lap.get("sessionResume", 0) for lap in laps)))
+                    if len(stints) > 1:
+                        print("Auto-detected %d stints in RCZ log: %s" % (len(stints), stints))
+                        base_output = args.output if args.output else args.log
+                        base_name, ext = os.path.splitext(base_output)
+                        for st in stints:
+                            st_out = f"{base_name}_stint{st}.ld"
+                            print("\n=== Exporting Stint %s -> %s ===" % (st, st_out))
+                            sub_cmd = [
+                                sys.executable, os.path.abspath(__file__), args.log, "RCZ",
+                                "--stint", str(st),
+                                "--output", st_out,
+                                "--frequency", str(args.frequency),
+                                "--min_lap_sec", str(args.min_lap_sec),
+                                "--lap", str(args.lap),
+                                "--driver", str(args.driver),
+                                "--vehicle_id", str(args.vehicle_id),
+                                "--vehicle_weight", str(args.vehicle_weight),
+                                "--vehicle_type", str(args.vehicle_type),
+                                "--vehicle_comment", str(args.vehicle_comment),
+                                "--venue_name", str(args.venue_name),
+                                "--event_name", str(args.event_name),
+                                "--event_session", str(args.event_session),
+                                "--long_comment", str(args.long_comment),
+                                "--short_comment", str(args.short_comment)
+                            ]
+                            subprocess.run(sub_cmd)
+                        print("Auto-stint split export complete.")
+                        exit(0)
+        except Exception as e:
+            print("Notice: Error checking stints in RCZ: %s" % e)
+
+    print("Loading log...")
     # Create our data log from the input data
     data_log = DataLog()
 
     if args.log_type == "CAN":
+        with open(args.log, "r") as file:
+            lines = file.readlines()
+
         if not os.path.isfile(args.dbc):
             print("ERROR: DBC file %s does not exist" % args.dbc)
             exit(1)
@@ -86,14 +137,23 @@ if __name__ == '__main__':
         print("Extracting data...")
         data_log.from_can_log(lines, can_db)
     elif args.log_type == "CSV":
+        with open(args.log, "r") as file:
+            lines = file.readlines()
         print("Extracting data...")
         data_log.from_csv_log(lines)
     elif args.log_type == "ACCESSPORT":
+        with open(args.log, "r") as file:
+            lines = file.readlines()
         print("Extracting data...")
         data_log.from_accessport_log(lines)
     elif args.log_type == "RACECHRONO":
+        with open(args.log, "r") as file:
+            lines = file.readlines()
         print("Extracting data...")
-        data_log.from_racechrono_log(lines)
+        data_log.from_racechrono_log(lines, target_lap=args.lap)
+    elif args.log_type == "RCZ":
+        print("Extracting RCZ data directly...")
+        data_log.from_rcz_log(args.log, target_lap=args.lap, target_stint=args.stint, min_lap_sec=args.min_lap_sec)
 
     if not data_log.channels:
         print("ERROR: Failed to find any channels in log data")
@@ -108,19 +168,57 @@ if __name__ == '__main__':
     # message in a channel.
     data_log.resample(args.frequency)
 
+    print("Calculating advanced math channels...")
+    data_log.calculate_math_channels()
+
     print("Converting to MoTeC log...")
 
+    # Auto-infer venue and vehicle metadata from filename/rcz if not explicitly provided
+    meta = getattr(data_log, "metadata", {})
+
+    # Auto-infer venue, driver, and vehicle metadata from log file / metadata if not explicitly provided
+    venue_name = args.venue_name if args.venue_name else meta.get("venue_name", "")
+    if not venue_name and hasattr(data_log, "rcz_metadata") and data_log.rcz_metadata.get("trackName"):
+        venue_name = data_log.rcz_metadata.get("trackName")
+
+    if not venue_name:
+        filename = os.path.basename(args.log).lower()
+        if "thunder_hill" in filename or "thunderhill" in filename:
+            venue_name = "thunderhill_raceway_park"
+        elif "laguna_seca" in filename:
+            venue_name = "laguna_seca"
+        elif "sonoma" in filename:
+            venue_name = "sonoma_raceway"
+        else:
+            venue_name = meta.get("Session", "Track Day")
+
+    event_name = args.event_name if args.event_name else meta.get("event_name", "")
+    if not event_name and venue_name:
+        event_name = venue_name.replace("_", " ").title() + " Track Day" if not venue_name.endswith("Track Day") else venue_name
+
+    driver_name = args.driver if args.driver else meta.get("driver", meta.get("Racer", ""))
+    if not driver_name:
+        filename = os.path.basename(args.log).lower()
+        if "saurabh" in filename or "session2_v601" in filename:
+            driver_name = "saurabh"
+        else:
+            driver_name = "BoYanZh"
+
+    vehicle_name = args.vehicle_id if args.vehicle_id else meta.get("vehicle_id", meta.get("Vehicle", "Toyota GR86"))
+
     motec_log = MotecLog()
-    motec_log.driver = args.driver
-    motec_log.vehicle_id = args.vehicle_id
+    if getattr(data_log, "datetime", None):
+        motec_log.datetime = data_log.datetime
+    motec_log.driver = driver_name
+    motec_log.vehicle_id = vehicle_name
     motec_log.vehicle_weight = args.vehicle_weight
     motec_log.vehicle_type = args.vehicle_type
     motec_log.vehicle_comment = args.vehicle_comment
-    motec_log.venue_name = args.venue_name
-    motec_log.event_name = args.event_name
-    motec_log.event_session = args.event_session
-    motec_log.long_comment = args.long_comment
-    motec_log.short_comment = args.short_comment
+    motec_log.venue_name = venue_name
+    motec_log.event_name = event_name
+    motec_log.event_session = args.event_session if args.event_session else meta.get("event_session", "")
+    motec_log.long_comment = args.long_comment if args.long_comment else meta.get("long_comment", meta.get("Comment", ""))
+    motec_log.short_comment = args.short_comment if args.short_comment else meta.get("short_comment", "")
 
     motec_log.initialize()
     motec_log.add_all_channels(data_log)
@@ -134,10 +232,23 @@ if __name__ == '__main__':
         candump_filename = os.path.splitext(candump_filename)[0]
         ld_filename = os.path.join(candump_dir, candump_filename + ".ld")
 
+    ldx_filename = os.path.splitext(ld_filename)[0] + ".ldx"
+    gpx_filename = os.path.splitext(ld_filename)[0] + ".gpx"
+    kml_filename = os.path.splitext(ld_filename)[0] + ".kml"
+
     output_dir = os.path.dirname(ld_filename)
     if output_dir and not os.path.isdir(output_dir):
         print("Directory '%s' does not exist, will create it" % output_dir)
         os.makedirs(output_dir)
 
     motec_log.write(ld_filename)
+    motec_log.write_ldx(ldx_filename, getattr(data_log, "laps_info", None))
+    print("Saved .ld file: %s" % ld_filename)
+    print("Saved .ldx file: %s" % ldx_filename)
+
+    if motec_log.write_gpx(gpx_filename, data_log):
+        print("Saved .gpx track file: %s" % gpx_filename)
+    if motec_log.write_kml(kml_filename, data_log):
+        print("Saved .kml Google Earth file: %s" % kml_filename)
+
     print("Done!")
