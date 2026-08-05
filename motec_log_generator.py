@@ -41,6 +41,7 @@ def _get_stints(rcz_path):
 VENUE_NORMALIZE = {
     "thunderhill": "Thunderhill Raceway Park",
     "thunder hill": "Thunderhill Raceway Park",
+    "thill": "Thunderhill Raceway Park",
     "laguna": "Laguna Seca",
     "sonoma": "Sonoma Raceway",
 }
@@ -139,7 +140,8 @@ def _process_one(args, stint_override=None, output_override=None):
         elif "sonoma" in filename:
             venue_name = "Sonoma Raceway"
         else:
-            venue_name = meta.get("Session", "Track Day")
+            # Try Session/event_session metadata field as venue hint
+            venue_name = meta.get("event_session", meta.get("Session", ""))
 
     venue_name = _normalize_venue(venue_name)
 
