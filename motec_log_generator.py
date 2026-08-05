@@ -55,7 +55,11 @@ def _normalize_venue(name):
         if key in lower:
             # Preserve layout suffix: "Thunder Hill East Bypass" -> "Thunderhill Raceway Park (East Bypass)"
             idx = lower.index(key) + len(key)
-            suffix = name[idx:].strip().strip("-").strip("_").replace(",", " ")
+            suffix = name[idx:].strip().strip("-").replace(",", " ").replace("_", " ")
+            suffix = " ".join(suffix.split())
+            for abbr, full in [("EST", "East"), ("est", "East"),
+                                ("BY", "Bypass"), ("by", "Bypass")]:
+                suffix = suffix.replace(abbr, full)
             suffix = " ".join(suffix.split())
             if suffix:
                 return f"{canonical} ({suffix})"
