@@ -386,7 +386,7 @@ class DataLog(object):
                         metadata["driver"] = v
                     elif k in ["vehicle", "car"]:
                         metadata["vehicle_id"] = v
-                    elif k in ["session", "segment"]:
+                    elif k in ["session"]:
                         metadata["event_session"] = v
                     elif k in ["event", "championship"]:
                         metadata["event_name"] = v
