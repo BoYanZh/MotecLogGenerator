@@ -1131,33 +1131,45 @@ class DataLog(object):
             # Running Time Channel
             populate_channel("Running Time", "s", times_sec, 2)
 
-            # 2. Parse Speed
-            if "channel_1_200_0_4_0" in namelist:
-                raw_spd = np.frombuffer(read_channel("channel_1_200_0_4_0"), dtype="<i4")
-                if len(raw_spd) == n_samples:
-                    populate_channel("Ground Speed", "km/h", (raw_spd / 1000.0) * 3.6, 2)
+            # Auto-detect GPS device prefix (type 200 = external VBOX, type 100 = phone GPS)
+            gps_prefix = None
+            for _pfx in ["channel_1_200_0_", "channel_1_100_0_"]:
+                if any(n.startswith(_pfx) for n in namelist):
+                    gps_prefix = _pfx
+                    break
 
-            # 3. Parse Latitude & Longitude
-            if "channel_1_200_0_3_1" in namelist:
-                raw_ll = np.frombuffer(read_channel("channel_1_200_0_3_1"), dtype="<i4")
-                if len(raw_ll) == n_samples * 2:
-                    raw_ll = raw_ll.reshape(-1, 2)
-                    populate_channel("GPS Latitude", "deg", raw_ll[:, 0] / 6000000.0, 7)
-                    populate_channel("GPS Longitude", "deg", raw_ll[:, 1] / 6000000.0, 7)
+            if gps_prefix:
+                # 2. Parse Speed
+                _spd_key = gps_prefix + "4_0"
+                if _spd_key in namelist:
+                    raw_spd = np.frombuffer(read_channel(_spd_key), dtype="<i4")
+                    if len(raw_spd) == n_samples:
+                        populate_channel("Ground Speed", "km/h", (raw_spd / 1000.0) * 3.6, 2)
 
-            # 4. Parse Altitude
-            if "channel_1_200_0_5_0" in namelist:
-                raw_alt = np.frombuffer(read_channel("channel_1_200_0_5_0"), dtype="<i4")
-                if len(raw_alt) == n_samples:
-                    populate_channel("GPS Altitude", "m", raw_alt / 1000.0)
+                # 3. Parse Latitude & Longitude
+                _ll_key = gps_prefix + "3_1"
+                if _ll_key in namelist:
+                    raw_ll = np.frombuffer(read_channel(_ll_key), dtype="<i4")
+                    if len(raw_ll) == n_samples * 2:
+                        raw_ll = raw_ll.reshape(-1, 2)
+                        populate_channel("GPS Latitude", "deg", raw_ll[:, 0] / 6000000.0, 7)
+                        populate_channel("GPS Longitude", "deg", raw_ll[:, 1] / 6000000.0, 7)
 
-            # 5. Parse GPS Heading
-            if "channel_1_200_0_6_0" in namelist:
-                raw_hdg = np.frombuffer(read_channel("channel_1_200_0_6_0"), dtype="<i4")
-                if len(raw_hdg) == n_samples:
-                    populate_channel("GPS Heading", "deg", raw_hdg / 1000.0)
+                # 4. Parse Altitude
+                _alt_key = gps_prefix + "5_0"
+                if _alt_key in namelist:
+                    raw_alt = np.frombuffer(read_channel(_alt_key), dtype="<i4")
+                    if len(raw_alt) == n_samples:
+                        populate_channel("GPS Altitude", "m", raw_alt / 1000.0)
 
-            # 6. Parse Accelerations
+                # 5. Parse GPS Heading
+                _hdg_key = gps_prefix + "6_0"
+                if _hdg_key in namelist:
+                    raw_hdg = np.frombuffer(read_channel(_hdg_key), dtype="<i4")
+                    if len(raw_hdg) == n_samples:
+                        populate_channel("GPS Heading", "deg", raw_hdg / 1000.0)
+
+            # 6. Parse Accelerations (device 2, type 201)
             if "channel_2_201_0_9_0" in namelist:
                 raw_ay = np.frombuffer(read_channel("channel_2_201_0_9_0"), dtype="<i4")
                 if len(raw_ay) == n_samples:
@@ -1173,7 +1185,7 @@ class DataLog(object):
                 if len(raw_az) == n_samples:
                     populate_channel("Lean Angle", "deg", raw_az / 10000.0)
 
-            # 7. Parse Gyroscope / Yaw Rate
+            # 7. Parse Gyroscope / Yaw Rate (device 3, type 202)
             if "channel_3_202_0_14_0" in namelist:
                 raw_gz = np.frombuffer(read_channel("channel_3_202_0_14_0"), dtype="<i4")
                 if len(raw_gz) == n_samples:
@@ -1240,6 +1252,46 @@ class DataLog(object):
                     populate_channel(ch_name, ch_unit, vals_processed)
                 else:
                     populate_channel(f"OBD_{pid}", "", values)
+
+            # 8b. Parse OBD-II / CAN Channels — Device 4, Type 101 (shared timestamp format)
+            # Format: channel_4_101_0_1_1 = shared i32[::2] uptime timestamps for all PIDs
+            #         channel2_4_101_0_{pid}_3 = per-PID float64 values (same length as timestamps)
+            dev4_ts_key = "channel_4_101_0_1_1"
+            dir_prefix = os.path.dirname(dev4_ts_key)
+            if any(os.path.basename(n) == os.path.basename(dev4_ts_key) and
+                   os.path.dirname(n) == dir_prefix for n in namelist):
+                actual_key = next(
+                    n for n in namelist
+                    if os.path.basename(n) == "channel_4_101_0_1_1"
+                )
+                raw_obd4_ts = np.frombuffer(read_channel(actual_key), dtype="<i4")
+                if len(raw_obd4_ts) >= 2 and len(raw_obd4_ts) % 2 == 0:
+                    obd4_uptimes = raw_obd4_ts[::2].astype(np.float64)
+                    obd4_rel_times = (obd4_uptimes - stint_uptime_start) / 1000.0
+                    for pid, (ch_name, ch_unit, ch_scale, ch_offset) in rcz_pid_map.items():
+                        # Skip PIDs that use the GPS speed channel (already parsed above)
+                        if pid == "4":
+                            continue
+                        val_fname = f"channel2_4_101_0_{pid}_3"
+                        val_key = next(
+                            (n for n in namelist if os.path.basename(n) == val_fname),
+                            None,
+                        )
+                        if val_key is None:
+                            continue
+                        value_data = np.frombuffer(read_channel(val_key), dtype="<f8")
+                        count = min(len(obd4_uptimes), len(value_data))
+                        if count < 2:
+                            continue
+                        rel_t = obd4_rel_times[:count]
+                        vals = value_data[:count]
+                        interpolated = np.interp(times_sec, rel_t, vals)
+                        processed = interpolated * ch_scale + ch_offset
+                        if pid == "1004":
+                            processed = np.round(processed).clip(-1, 6)
+                        if ch_name not in self.channels:
+                            populate_channel(ch_name, ch_unit, processed)
+
         # Fallback for Chassis Yaw Rate if missing
         if "Chassis Yaw Rate" not in self.channels and "GPS Heading" in self.channels:
             gps_h_chan = self.channels["GPS Heading"]
