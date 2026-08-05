@@ -1256,6 +1256,19 @@ class DataLog(object):
             # 8b. Parse OBD-II / CAN Channels — Device 4, Type 101 (shared timestamp format)
             # Format: channel_4_101_0_1_1 = shared i32[::2] uptime timestamps for all PIDs
             #         channel2_4_101_0_{pid}_3 = per-PID float64 values (same length as timestamps)
+            # Device 4/type 101 uses phone-IMU channels for PIDs 7/8/49/50 — different from
+            # the GR86-ECU meaning of the same PIDs on device 12/type 100.
+            _G = 9.80665
+            rcz_dev4_pid_overrides = {
+                # PID 7 on device 4 = phone lateral accelerometer (m/s²), NOT ECU Roll Angle
+                "7":  ("CG Accel Lateral",     "G",    1.0 / _G, 0.0),
+                # PID 8 on device 4 = phone vertical accelerometer (m/s², includes gravity) — skip
+                "8":  None,
+                # PID 49 on device 4 = phone longitudinal accelerometer (m/s²)
+                "49": ("CG Accel Longitudinal", "G",    1.0 / _G, 0.0),
+                # PID 50 — weaker correlation with any axis; skip
+                "50": None,
+            }
             dev4_ts_key = "channel_4_101_0_1_1"
             dir_prefix = os.path.dirname(dev4_ts_key)
             if any(os.path.basename(n) == os.path.basename(dev4_ts_key) and
@@ -1268,7 +1281,18 @@ class DataLog(object):
                 if len(raw_obd4_ts) >= 2 and len(raw_obd4_ts) % 2 == 0:
                     obd4_uptimes = raw_obd4_ts[::2].astype(np.float64)
                     obd4_rel_times = (obd4_uptimes - stint_uptime_start) / 1000.0
-                    for pid, (ch_name, ch_unit, ch_scale, ch_offset) in rcz_pid_map.items():
+                    # Merge standard map with device-4-specific overrides
+                    dev4_map = {**rcz_pid_map, **{
+                        k: v for k, v in rcz_dev4_pid_overrides.items() if v is not None
+                    }}
+                    for pid in set(list(rcz_pid_map.keys()) + list(rcz_dev4_pid_overrides.keys())):
+                        override = rcz_dev4_pid_overrides.get(pid, "NOT_OVERRIDDEN")
+                        if override is None:
+                            continue  # explicitly skipped for device 4
+                        mapping = dev4_map.get(pid)
+                        if mapping is None:
+                            continue
+                        ch_name, ch_unit, ch_scale, ch_offset = mapping
                         # Skip PIDs that use the GPS speed channel (already parsed above)
                         if pid == "4":
                             continue
