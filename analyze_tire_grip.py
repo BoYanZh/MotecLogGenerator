@@ -22,9 +22,6 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ldparser.ldparser import ldData
 
-# Known tire info per session date/name prefix
-TIRE_INFO = {}
-
 
 def get_channel(ld, name):
     for c in ld.channs:
@@ -33,13 +30,20 @@ def get_channel(ld, name):
     return None
 
 
-def analyze_session(fpath, min_spd=60.0, window_sec=1.0, freq=20):
+def get_frequency(ld):
+    if ld.channs:
+        return ld.channs[0].freq
+    return 20
+
+
+def analyze_session(fpath, min_spd=60.0, window_sec=1.0):
     fname = os.path.basename(fpath)
     try:
         ld = ldData.fromfile(fpath)
     except Exception as e:
         return None, f"Read error: {e}"
 
+    freq = get_frequency(ld)
     spd = get_channel(ld, "Ground Speed")
     ay = get_channel(ld, "CG Accel Lateral")
 
@@ -57,15 +61,18 @@ def analyze_session(fpath, min_spd=60.0, window_sec=1.0, freq=20):
 
     ay_abs = np.abs(ay)
     w = int(window_sec * freq)
-    sustained = np.array([
-        ay_abs[max(0, i - w): i + w].min()
-        for i in range(len(ay_abs))
-    ])
+    if w < 1:
+        w = 1
+
+    size = 2 * w + 1
+    half = size // 2
+    padded = np.pad(ay_abs, half, mode="edge")
+    windows = np.lib.stride_tricks.sliding_window_view(padded, size)
+    sustained = np.min(windows, axis=1)[:len(ay_abs)]
 
     sm = sustained[mask]
     am = ay_abs[mask]
 
-    # Find longest segment above 0.7G
     above = (ay_abs > 0.7).astype(int)
     segs, start = [], None
     for i, v in enumerate(above):
@@ -79,24 +86,16 @@ def analyze_session(fpath, min_spd=60.0, window_sec=1.0, freq=20):
 
     best_dur, best_mean = 0.0, 0.0
     if segs:
-        segs.sort(key=lambda x: -(x[1] - x[0]))
-        best_dur = (segs[0][1] - segs[0][0]) / freq
-        best_mean = ay_abs[segs[0][0]: segs[0][1]].mean()
-
-    # Determine tire info
-    tire = "unknown"
-    for key, val in TIRE_INFO.items():
-        if key in fname:
-            tire = val
-            break
+        best_seg = max(segs, key=lambda x: x[1] - x[0])
+        best_dur = (best_seg[1] - best_seg[0]) / freq
+        best_mean = ay_abs[best_seg[0]: best_seg[1]].mean()
 
     return {
         "file": fname.replace(".ld", ""),
-        "tire": tire,
         "raw_max": round(float(am.max()), 3),
         "sust_max": round(float(sm.max()), 3),
-        "p99": round(float(np.percentile(am, 99)), 3),
-        "p95": round(float(np.percentile(am, 95)), 3),
+        "p99": round(float(np.percentile(am, 99, method="linear")), 3),
+        "p95": round(float(np.percentile(am, 95, method="linear")), 3),
         "best_seg_s": round(best_dur, 1),
         "best_seg_mean": round(best_mean, 3),
         "moving_samples": int(mask.sum()),
@@ -111,6 +110,10 @@ def main():
     args = parser.parse_args()
 
     dst = args.dir
+    if not os.path.isdir(dst):
+        print(f"ERROR: Directory '{dst}' does not exist.")
+        sys.exit(1)
+
     results = []
     skipped = []
 
@@ -123,20 +126,19 @@ def main():
         else:
             skipped.append((f, err))
 
-    # Sort by sustained max G descending
     results.sort(key=lambda x: -x["sust_max"])
 
     col_w = 58
     print()
-    print("=" * 119)
-    print(f"{'File':<{col_w}} {'Tire':<16} {'RawMax':>8} {'SustMax':>8} {'P99':>7} {'BestSeg':>8} {'SegMean':>8}")
-    print("=" * 119)
+    print("=" * 105)
+    print(f"{'File':<{col_w}} {'RawMax':>8} {'SustMax':>8} {'P99':>7} {'BestSeg':>8} {'SegMean':>8}")
+    print("=" * 105)
     for r in results:
         short = r["file"]
         if len(short) > col_w - 1:
             short = short[-(col_w - 1):]
         print(
-            f"{short:<{col_w}} {r['tire']:<16} "
+            f"{short:<{col_w}} "
             f"{r['raw_max']:>7.3f}G {r['sust_max']:>7.3f}G "
             f"{r['p99']:>6.3f}G {r['best_seg_s']:>7.1f}s "
             f"{r['best_seg_mean']:>7.3f}G"

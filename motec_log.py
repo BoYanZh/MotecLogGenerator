@@ -61,79 +61,63 @@ class MotecLog(object):
             self.driver, self.vehicle_id, self.venue_name, self.datetime, self.short_comment)
 
     def add_channel(self, log_channel: Channel):
-        """ Adds a single channel of data to the motec log.
-
-        log_channel: data_log.Channel
-        """
-        # Advance the header data pointer
-        self.ld_header.data_ptr += self.CHANNEL_HEADER_SIZE
-
-        # Advance the data pointers of all previous channels
-        for ld_channel in self.ld_channels:
-            ld_channel.data_ptr += self.CHANNEL_HEADER_SIZE
-
-        # Determine our file pointers
-        if self.ld_channels:
-            meta_ptr = self.ld_channels[-1].next_meta_ptr
-            prev_meta_ptr = self.ld_channels[-1].meta_ptr
-            data_ptr = self.ld_channels[-1].data_ptr + self.ld_channels[-1]._data.nbytes
-        else:
-            # First channel needs the previous pointer zero'd out
-            meta_ptr = self.HEADER_PTR
-            prev_meta_ptr = 0
-            data_ptr = self.ld_header.data_ptr
-        next_meta_ptr = meta_ptr + self.CHANNEL_HEADER_SIZE
-
-        # Channel specs
-        data_len = len(log_channel.messages)
-        data_type = np.float32 if log_channel.data_type is float else np.int32
+        dtype = np.float32 if log_channel.data_type is float else np.int32
         freq = int(round(log_channel.avg_frequency()))
-        shift = 0
-        multiplier = 1
-        scale = 1
 
-        # Decimal places must be hard coded to zero for float32 channels in MoTeC format
-        decimals = 0
-
-        ld_channel = ldChan(None, meta_ptr, prev_meta_ptr, next_meta_ptr, data_ptr, data_len, \
-            data_type, freq, shift, multiplier, scale, decimals, log_channel.name, "", \
-            log_channel.units)
-
-        # Add in the channel data
-        ld_channel._data = np.array([], data_type)
-        for msg in log_channel.messages:
-            ld_channel._data = np.append(ld_channel._data, data_type(msg.value))
-
-        # Add the ld channel and advance the file pointers
+        ld_channel = ldChan(
+            None,
+            meta_ptr=0,
+            prev_meta_ptr=0,
+            next_meta_ptr=0,
+            data_ptr=0,
+            data_len=len(log_channel.messages),
+            dtype=dtype,
+            freq=freq,
+            shift=0,
+            mul=1,
+            scale=1,
+            dec=0,
+            name=log_channel.name,
+            short_name="",
+            unit=log_channel.units,
+        )
+        ld_channel._data = np.array([dtype(msg.value) for msg in log_channel.messages], dtype=dtype)
         self.ld_channels.append(ld_channel)
 
     def add_all_channels(self, data_log):
-        """ Adds all channels from a DataLog to the motec log.
-
-        data_log: data_log.DataLog
-        """
-        for channel_name, channel in data_log.channels.items():
+        for channel in data_log.channels.values():
             self.add_channel(channel)
 
+    def _finalize_pointers(self):
+        n = len(self.ld_channels)
+        if n == 0:
+            return
+
+        meta_base = self.HEADER_PTR
+        for i, ch in enumerate(self.ld_channels):
+            ch.meta_ptr = meta_base + i * self.CHANNEL_HEADER_SIZE
+            ch.prev_meta_ptr = meta_base + (i - 1) * self.CHANNEL_HEADER_SIZE if i > 0 else 0
+            ch.next_meta_ptr = meta_base + (i + 1) * self.CHANNEL_HEADER_SIZE if i < n - 1 else 0
+
+        data_ptr = meta_base + n * self.CHANNEL_HEADER_SIZE
+        self.ld_header.data_ptr = data_ptr
+        for ch in self.ld_channels:
+            ch.data_ptr = data_ptr
+            data_ptr += ch._data.nbytes
+
     def write(self, filename):
-        """ Writes the motec log data to disc. """
-        # Check for the presence of any channels, since the ldData write() method doesn't
-        # gracefully handle zero channels
-        if self.ld_channels:
-            ld_data = ldData(self.ld_header, self.ld_channels)
-
-            # Need to zero out the final channel pointer
-            ld_data.channs[-1].next_meta_ptr = 0
-
-            ld_data.write(filename)
-        else:
+        if not self.ld_channels:
             with open(filename, "wb") as f:
                 self.ld_header.write(f, 0)
+            return
+
+        self._finalize_pointers()
+        ld_data = ldData(self.ld_header, self.ld_channels)
+        ld_data.channs[-1].next_meta_ptr = 0
+        ld_data.write(filename)
 
     def write_ldx(self, ldx_filename, laps_info=None):
-        """ Writes the associated MoTeC .ldx index file containing lap markers and metadata details. """
         import xml.etree.ElementTree as ET
-        from xml.dom import minidom
 
         root = ET.Element("LDXFile", {
             "Locale": "English_United States.1252",
@@ -147,11 +131,6 @@ class MotecLog(object):
         marker_group = ET.SubElement(marker_block, "MarkerGroup", {"Name": "Beacons", "Index": "3"})
 
         laps = laps_info.get("laps", []) if laps_info and "laps" in laps_info else []
-        # MoTeC i2 automatically creates Lap 1 from 0.0s to the first Beacon Marker.
-        # To avoid 0s or 3s ghost Out Laps:
-        # - Never write a beacon at 0.0s.
-        # - Write beacons ONLY at lap transition boundaries (end of each lap except the final stint end).
-        # - For a single-lap file, no intermediate beacons are written so MoTeC treats 0.0s..end as Lap 1.
         beacon_times = []
         if len(laps) > 1:
             for lap in laps[:-1]:
@@ -204,133 +183,109 @@ class MotecLog(object):
         add_detail_str("Vehicle Comment", self.vehicle_comment)
 
         total_laps = laps_info.get("total_laps", 1) if laps_info else 1
-        fastest_lap = laps_info.get("fastest_lap", 0) if laps_info else 0
         fastest_time_sec = laps_info.get("fastest_time", 0.0) if laps_info else 0.0
 
         if fastest_time_sec > 0:
-            m = int(fastest_time_sec // 60)
-            s = fastest_time_sec % 60
-            fastest_time_str = f"{m}:{s:06.3f}"
+            m, s = divmod(fastest_time_sec, 60)
+            fastest_time_str = f"{int(m)}:{s:06.3f}"
         else:
             fastest_time_str = "0:00.000"
 
         add_detail_str("Total Laps", str(total_laps))
         add_detail_str("Fastest Time", fastest_time_str)
-        add_detail_str("Fastest Lap", str(fastest_lap))
 
-        xml_str = minidom.parseString(ET.tostring(root)).toprettyxml(indent=" ")
+        ET.indent(root, space="  ")
+        xml_str = ET.tostring(root, encoding="unicode")
         with open(ldx_filename, "w", encoding="utf-8") as f:
             f.write(xml_str)
 
-    def _find_gps_channels(self, data_log):
-        lat_names = ["GPS Latitude", "Latitude", "gps_lat", "lat"]
-        lon_names = ["GPS Longitude", "Longitude", "gps_lon", "lon"]
-        lat_chan = next((data_log.channels[n] for n in lat_names if n in data_log.channels), None)
-        lon_chan = next((data_log.channels[n] for n in lon_names if n in data_log.channels), None)
-        return lat_chan, lon_chan
+    @staticmethod
+    def _find_gps_channels(data_log):
+        lat = data_log.channels.get("GPS Latitude") or data_log.channels.get("Real GPS Latitude")
+        lon = data_log.channels.get("GPS Longitude") or data_log.channels.get("Real GPS Longitude")
+        return lat, lon
 
-    def write_gpx(self, gpx_filename, data_log):
-        """ Export GPS track points as a standard GPX file. """
-        lat_chan, lon_chan = self._find_gps_channels(data_log)
+    @staticmethod
+    def _downsample_step(channel, target_hz=5.0):
+        freq = channel.avg_frequency()
+        if freq <= target_hz:
+            return 1
+        return max(1, int(round(freq / target_hz)))
+
+    @staticmethod
+    def _iter_gps_trackpoints(data_log, target_hz=5.0):
+        lat_chan, lon_chan = MotecLog._find_gps_channels(data_log)
         if not lat_chan or not lon_chan:
-            return False
-
-        alt_chan = data_log.channels.get("GPS Altitude")
-        spd_chan = data_log.channels.get("Ground Speed")
-
+            return
         n = min(len(lat_chan.messages), len(lon_chan.messages))
         if n == 0:
-            return False
+            return
+        alt_chan = data_log.channels.get("GPS Altitude")
+        spd_chan = data_log.channels.get("Ground Speed")
+        step = MotecLog._downsample_step(lat_chan, target_hz)
+        for i in range(0, n, step):
+            lat = lat_chan.messages[i].value
+            lon = lon_chan.messages[i].value
+            if abs(lat) < 0.001 and abs(lon) < 0.001:
+                continue
+            alt = alt_chan.messages[i].value if alt_chan and i < len(alt_chan.messages) else 0.0
+            spd = spd_chan.messages[i].value if spd_chan and i < len(spd_chan.messages) else None
+            yield lat, lon, alt, spd
 
+    def write_gpx(self, gpx_filename, data_log):
         import xml.etree.ElementTree as ET
-        from xml.dom import minidom
+
+        points = list(self._iter_gps_trackpoints(data_log))
+        if not points:
+            return False
 
         root = ET.Element("gpx", {
             "version": "1.1",
             "creator": "MotecLogGenerator",
             "xmlns": "http://www.topografix.com/GPX/1/1"
         })
-
         trk = ET.SubElement(root, "trk")
         ET.SubElement(trk, "name").text = self.venue_name or "Track Session"
         trkseg = ET.SubElement(trk, "trkseg")
 
-        # Downsample for GPX if high frequency (e.g. max 5Hz for GPX export)
-        step = max(1, int(round(lat_chan.avg_frequency() / 5.0))) if lat_chan.avg_frequency() > 5.0 else 1
-
-        for i in range(0, n, step):
-            lat = lat_chan.messages[i].value
-            lon = lon_chan.messages[i].value
-
-            # Skip zero / invalid lat lon
-            if abs(lat) < 0.001 and abs(lon) < 0.001:
-                continue
-
-            pt = ET.SubElement(trkseg, "trkpt", {
-                "lat": f"{lat:.7f}",
-                "lon": f"{lon:.7f}"
-            })
-
-            if alt_chan and i < len(alt_chan.messages):
-                ET.SubElement(pt, "ele").text = f"{alt_chan.messages[i].value:.2f}"
-            if spd_chan and i < len(spd_chan.messages):
-                # Speed in m/s for GPX
-                spd_ms = spd_chan.messages[i].value / 3.6 if spd_chan.units == "km/h" else spd_chan.messages[i].value
+        for lat, lon, alt, spd in points:
+            pt = ET.SubElement(trkseg, "trkpt", {"lat": f"{lat:.7f}", "lon": f"{lon:.7f}"})
+            ET.SubElement(pt, "ele").text = f"{alt:.2f}"
+            if spd is not None:
+                spd_ms = spd / 3.6
                 ET.SubElement(pt, "speed").text = f"{spd_ms:.2f}"
 
-        xml_str = minidom.parseString(ET.tostring(root)).toprettyxml(indent=" ")
+        ET.indent(root, space="  ")
+        xml_str = ET.tostring(root, encoding="unicode")
         with open(gpx_filename, "w", encoding="utf-8") as f:
             f.write(xml_str)
         return True
 
     def write_kml(self, kml_filename, data_log):
-        """ Export GPS track points as a KML LineString file for Google Earth. """
-        lat_chan, lon_chan = self._find_gps_channels(data_log)
-        if not lat_chan or not lon_chan:
-            return False
-        alt_chan = data_log.channels.get("GPS Altitude")
-
-        n = min(len(lat_chan.messages), len(lon_chan.messages))
-        if n == 0:
-            return False
-
-        coords_str_list = []
-        step = max(1, int(round(lat_chan.avg_frequency() / 5.0))) if lat_chan.avg_frequency() > 5.0 else 1
-
-        for i in range(0, n, step):
-            lat = lat_chan.messages[i].value
-            lon = lon_chan.messages[i].value
-            alt = alt_chan.messages[i].value if alt_chan and i < len(alt_chan.messages) else 0.0
-
-            if abs(lat) < 0.001 and abs(lon) < 0.001:
-                continue
-
-            coords_str_list.append(f"{lon:.7f},{lat:.7f},{alt:.2f}")
-
-        if not coords_str_list:
-            return False
-
         import xml.etree.ElementTree as ET
-        from xml.dom import minidom
+
+        points = list(self._iter_gps_trackpoints(data_log))
+        if not points:
+            return False
+
+        coords_str_list = [f"{lon:.7f},{lat:.7f},{alt:.2f}" for lat, lon, alt, _spd in points]
 
         root = ET.Element("kml", {"xmlns": "http://www.opengis.net/kml/2.2"})
         doc = ET.SubElement(root, "Document")
         ET.SubElement(doc, "name").text = self.venue_name or "GPS Track Overlay"
-
         pm = ET.SubElement(doc, "Placemark")
         ET.SubElement(pm, "name").text = "Track Path"
-
         style = ET.SubElement(pm, "Style")
         lstyle = ET.SubElement(style, "LineStyle")
-        ET.SubElement(lstyle, "color").text = "ff0000ff"  # Red line
+        ET.SubElement(lstyle, "color").text = "ff0000ff"
         ET.SubElement(lstyle, "width").text = "4"
-
         ls = ET.SubElement(pm, "LineString")
         ET.SubElement(ls, "extrude").text = "1"
         ET.SubElement(ls, "tessellate").text = "1"
         ET.SubElement(ls, "coordinates").text = "\n".join(coords_str_list)
 
-        xml_str = minidom.parseString(ET.tostring(root)).toprettyxml(indent=" ")
+        ET.indent(root, space="  ")
+        xml_str = ET.tostring(root, encoding="unicode")
         with open(kml_filename, "w", encoding="utf-8") as f:
             f.write(xml_str)
         return True

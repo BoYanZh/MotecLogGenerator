@@ -5,6 +5,15 @@ import math
 import numpy as np
 
 
+def _interp_zoh(times_target, times_src, values_src):
+    idx = np.searchsorted(times_src, times_target, side="right") - 1
+    idx = np.clip(idx, 0, len(values_src) - 1)
+    return values_src[idx]
+
+
+DISCRETE_CHANNELS = {"Gear", "Lap Number", "GPS Fix", "GPS Satellites"}
+
+
 class DataLog(object):
     channels: dict[str, Channel]
     """ Container for storing log data which contains a set of channels with time series data."""
@@ -31,22 +40,21 @@ class DataLog(object):
         for name, channel in self.channels.items():
             t = min(t, channel.start())
 
-        if t != math.inf:
-            return t
-        else:
-            return 0.0
+        return t if t != math.inf else 0.0
 
     def end(self):
         """ Returns the latest timestamp from all existing channels [s]. """
-        end = 0
+        end = -math.inf
         for name, channel in self.channels.items():
             end = max(end, channel.end())
 
-        return end
+        return end if end != -math.inf else 0.0
 
     def duration(self):
         """ Returns the duration of the log [s]. """
-        return self.end() - self.start()
+        s = self.start()
+        e = self.end()
+        return max(0.0, e - s)
 
     def resample(self, frequency):
         """ Resamples all channels such that all messages occur at a fixed frequency.
@@ -59,153 +67,173 @@ class DataLog(object):
             self.channels[channel_name].resample(start, end, frequency)
 
     def calculate_math_channels(self):
-        """ Calculates advanced racing math channels to match simulator-level data richness.
+        self._derive_cg_accel_lateral()
+        self._derive_cg_accel_longitudinal()
+        self._calculate_kinematics()
+        self._calculate_g_sum()
+        self._derive_brake_pos()
+        self._calculate_input_rates()
+        self._mirror_throttle_accel()
+        self._mirror_gps_channels()
 
-        This should be called after resampling the log to a fixed frequency.
-        Generates: Tire Slip Angles (FL/FR/RL/RR), G-Sum, Understeer Index, and Input Rates.
-        Constants tuned for Toyota GR86 (Wheelbase: 2.575m, Ratio: 13.5:1).
-        """
-        # Fallback: derive CG Accel Lateral from kinematic (Vx * YawRate) if missing
-        if "CG Accel Lateral" not in self.channels and "Ground Speed" in self.channels and "Chassis Yaw Rate" in self.channels:
-            spd_chan = self.channels["Ground Speed"]
-            yaw_chan = self.channels["Chassis Yaw Rate"]
-            n_m = len(spd_chan.messages)
-            if n_m > 0:
-                t_arr = np.array([m.timestamp for m in spd_chan.messages])
-                vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
-                yr_rad = np.radians([m.value for m in yaw_chan.messages])
-                ay_derived = (vx_ms * yr_rad) / 9.80665
-                self.add_channel("CG Accel Lateral", "G", float, 2)
-                self.channels["CG Accel Lateral"].messages = [Message(t_arr[i], ay_derived[i]) for i in range(n_m)]
+    def _derive_cg_accel_lateral(self):
+        if "CG Accel Lateral" in self.channels:
+            return
+        if "Ground Speed" not in self.channels or "Chassis Yaw Rate" not in self.channels:
+            return
+        spd_chan = self.channels["Ground Speed"]
+        yaw_chan = self.channels["Chassis Yaw Rate"]
+        n = len(spd_chan.messages)
+        if n < 1:
+            return
+        t_arr = np.array([m.timestamp for m in spd_chan.messages])
+        vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
+        yr_rad = np.radians([m.value for m in yaw_chan.messages])
+        ay = (vx_ms * yr_rad) / 9.80665
+        self.add_channel("CG Accel Lateral", "G", float, 2)
+        self.channels["CG Accel Lateral"].messages = [Message(t_arr[i], ay[i]) for i in range(n)]
 
-        # Fallback: derive CG Accel Longitudinal from speed derivative if missing
-        if "CG Accel Longitudinal" not in self.channels and "Ground Speed" in self.channels:
-            spd_chan = self.channels["Ground Speed"]
-            n_m = len(spd_chan.messages)
-            if n_m >= 2:
-                t_arr = np.array([m.timestamp for m in spd_chan.messages])
-                vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
-                ax_derived = np.gradient(vx_ms, t_arr) / 9.80665
-                self.add_channel("CG Accel Longitudinal", "G", float, 2)
-                self.channels["CG Accel Longitudinal"].messages = [Message(t_arr[i], ax_derived[i]) for i in range(n_m)]
+    def _derive_cg_accel_longitudinal(self):
+        if "CG Accel Longitudinal" in self.channels:
+            return
+        if "Ground Speed" not in self.channels:
+            return
+        spd_chan = self.channels["Ground Speed"]
+        n = len(spd_chan.messages)
+        if n < 2:
+            return
+        t_arr = np.array([m.timestamp for m in spd_chan.messages])
+        vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
+        ax = np.gradient(vx_ms, t_arr) / 9.80665
+        self.add_channel("CG Accel Longitudinal", "G", float, 2)
+        self.channels["CG Accel Longitudinal"].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
 
-        # --- Kinematic Vehicle Dynamics (Body Slip, Tire Slip, Understeer Index) ---
-        has_kinematics = all(req in self.channels for req in ["Ground Speed", "CG Accel Lateral", "Chassis Yaw Rate"])
-        if has_kinematics:
-            vx_chan = self.channels["Ground Speed"]
-            n = len(vx_chan.messages)
-            if n >= 2:
-                time = np.array([m.timestamp for m in vx_chan.messages])
+    # --- GR86 vehicle dynamics constants ---
+    # These are tuned specifically for the Toyota GR86 / Subaru BRZ (2022+).
+    # The tire slip angle and understeer index channels will be incorrect for
+    # any other vehicle. To adapt, replace these with values for your car.
+    _GR86_STEERING_RATIO = 13.5          # steering wheel angle : road wheel angle
+    _GR86_WHEELBASE_M = 2.575            # distance between front and rear axles
+    _GR86_CG_TO_FRONT_AXLE_M = 1.25      # distance from center of gravity to front axle
+    _GR86_CG_TO_REAR_AXLE_M = 1.325      # distance from center of gravity to rear axle
+    _GR86_LAT_VEL_TAU_S = 2.0            # time constant for lateral velocity complementary filter
 
-                # Unit detection for speed (ensure m/s for internal math)
-                vx = np.array([m.value for m in vx_chan.messages])
-                if vx_chan.units == "km/h":
-                    vx /= 3.6
+    def _calculate_kinematics(self):
+        required = ["Ground Speed", "CG Accel Lateral", "Chassis Yaw Rate"]
+        if not all(r in self.channels for r in required):
+            return
+        vx_chan = self.channels["Ground Speed"]
+        n = len(vx_chan.messages)
+        if n < 2:
+            return
+        time = np.array([m.timestamp for m in vx_chan.messages])
+        vx = np.array([m.value for m in vx_chan.messages])
+        if vx_chan.units == "km/h":
+            vx /= 3.6
+        ay = np.array([m.value * 9.80665 for m in self.channels["CG Accel Lateral"].messages])
+        yaw_rate_degs = np.array([m.value for m in self.channels["Chassis Yaw Rate"].messages])
+        yaw_rate = np.radians(yaw_rate_degs * -1.0)
 
-                ay = np.array([m.value * 9.80665 for m in self.channels["CG Accel Lateral"].messages])
+        dt = np.zeros(n)
+        dt[1:] = np.diff(time)
 
-                # Chassis Yaw Rate was flipped in from_racechrono_log (* -1.0)
-                # Flip it back to physical convention (Positive = Left Turn) for kinematics
-                yaw_rate_degs = np.array([m.value for m in self.channels["Chassis Yaw Rate"].messages])
-                yaw_rate = np.radians(yaw_rate_degs * -1.0)
+        vy = np.zeros(n)
+        beta = np.zeros(n)
+        tau = self._GR86_LAT_VEL_TAU_S
 
-                dt = np.zeros(n)
-                dt[1:] = np.diff(time)
+        for i in range(1, n):
+            vy_dot = ay[i] - (vx[i] * yaw_rate[i])
+            alpha = np.exp(-dt[i] / tau)
+            vy[i] = (vy[i - 1] + vy_dot * dt[i]) * alpha
+            if abs(ay[i]) < 0.49 and abs(yaw_rate_degs[i]) < 1.0:
+                vy[i] = 0.0
+            if vx[i] > 5.0:
+                beta[i] = np.arctan2(vy[i], vx[i])
 
-                # --- 1. Body Slip Angle (Beta) Calculation ---
-                vy = np.zeros(n)
-                beta = np.zeros(n)
-                tau = 2.0
+        ratio = self._GR86_STEERING_RATIO
+        wheelbase = self._GR86_WHEELBASE_M
+        lf = self._GR86_CG_TO_FRONT_AXLE_M
+        lr = self._GR86_CG_TO_REAR_AXLE_M
 
-                for i in range(1, n):
-                    vy_dot = ay[i] - (vx[i] * yaw_rate[i])
-                    alpha = np.exp(-dt[i] / tau)
-                    vy[i] = (vy[i-1] + vy_dot * dt[i]) * alpha
+        slip_f = np.zeros(n)
+        slip_r = np.zeros(n)
+        steer_rad = np.zeros(n)
+        if "Steering Angle" in self.channels:
+            steer_deg = np.array([m.value for m in self.channels["Steering Angle"].messages])
+            steer_rad = np.radians(steer_deg / ratio)
 
-                    is_straight = (abs(ay[i]) < 0.49) and (abs(yaw_rate_degs[i]) < 1.0)
-                    if is_straight:
-                        vy[i] = 0.0
+        for i in range(n):
+            if vx[i] > 5.0:
+                slip_f[i] = np.degrees(steer_rad[i] - np.arctan2(vy[i] + yaw_rate[i] * lf, vx[i]))
+                slip_r[i] = np.degrees(-np.arctan2(vy[i] - yaw_rate[i] * lr, vx[i]))
 
-                    if vx[i] > 5.0:
-                        beta[i] = np.arctan2(vy[i], vx[i])
-                    else:
-                        beta[i] = 0.0
+        for name in ("Tire Slip Angle FL", "Tire Slip Angle FR", "Tire Slip Angle RL", "Tire Slip Angle RR"):
+            self.add_channel(name, "deg", float, 2)
+            src_data = slip_f if "F" in name else slip_r
+            self.channels[name].messages = [Message(time[i], src_data[i]) for i in range(n)]
 
-                # --- 2. Tire Slip Angle Calculation (Kinematic Bicycle Model) ---
-                ratio = 13.5
-                wheelbase = 2.575
-                lf = 1.25   # Distance from CG to front axle
-                lr = 1.325  # Distance from CG to rear axle
+        us_index = np.zeros(n)
+        for i in range(n):
+            if vx[i] > 5.0:
+                us_index[i] = np.degrees(steer_rad[i]) - np.degrees(wheelbase * yaw_rate[i] / vx[i])
+        self.add_channel("Understeer Index", "deg", float, 2)
+        self.channels["Understeer Index"].messages = [Message(time[i], us_index[i]) for i in range(n)]
 
-                slip_f = np.zeros(n)
-                slip_r = np.zeros(n)
-                steer_rad = np.zeros(n)
+    def _calculate_g_sum(self):
+        if "CG Accel Longitudinal" not in self.channels or "CG Accel Lateral" not in self.channels:
+            return
+        ax_msgs = self.channels["CG Accel Longitudinal"].messages
+        ay_msgs = self.channels["CG Accel Lateral"].messages
+        n = min(len(ax_msgs), len(ay_msgs))
+        if n < 2:
+            return
+        time_g = [ax_msgs[i].timestamp for i in range(n)]
+        ax = np.array([ax_msgs[i].value for i in range(n)])
+        ay_g = np.array([ay_msgs[i].value for i in range(n)])
+        g_sum = np.sqrt(ax ** 2 + ay_g ** 2)
+        self.add_channel("G Force Combined", "G", float, 2)
+        self.channels["G Force Combined"].messages = [Message(time_g[i], g_sum[i]) for i in range(n)]
 
-                if "Steering Angle" in self.channels:
-                    steer_deg = np.array([m.value for m in self.channels["Steering Angle"].messages])
-                    steer_rad = np.radians(steer_deg / ratio)
+    def _derive_brake_pos(self):
+        # GR86 empirical: brake master cylinder pressure ~96 kPa per 1% brake pedal position
+        if "Brake Press" not in self.channels or "Brake Pos" in self.channels:
+            return
+        press_chan = self.channels["Brake Press"]
+        n = len(press_chan.messages)
+        if n < 1:
+            return
+        time_p = [m.timestamp for m in press_chan.messages]
+        press_vals = np.array([m.value for m in press_chan.messages])
+        if press_chan.units == "bar":
+            press_vals *= 100.0
+        bpos = np.clip(press_vals / 96.0, 0.0, 100.0)
+        self.add_channel("Brake Pos", "%", float, 2)
+        self.channels["Brake Pos"].messages = [Message(time_p[i], bpos[i]) for i in range(n)]
 
-                for i in range(n):
-                    if vx[i] > 5.0:
-                        slip_f[i] = np.degrees(steer_rad[i] - np.arctan2(vy[i] + yaw_rate[i]*lf, vx[i]))
-                        slip_r[i] = np.degrees(-np.arctan2(vy[i] - yaw_rate[i]*lr, vx[i]))
-
-                tire_names = ["Tire Slip Angle FL", "Tire Slip Angle FR", "Tire Slip Angle RL", "Tire Slip Angle RR"]
-                for name in tire_names:
-                    self.add_channel(name, "deg", float, 2)
-                    src_data = slip_f if "F" in name else slip_r
-                    self.channels[name].messages = [Message(time[i], src_data[i]) for i in range(n)]
-
-                # --- 3. Understeer Index ---
-                us_index = np.zeros(n)
-                for i in range(n):
-                    if vx[i] > 5.0:
-                        us_index[i] = np.degrees(steer_rad[i]) - np.degrees(wheelbase * yaw_rate[i] / vx[i])
-
-                self.add_channel("Understeer Index", "deg", float, 2)
-                self.channels["Understeer Index"].messages = [Message(time[i], us_index[i]) for i in range(n)]
-
-        # --- 4. G Force Combined (G-Sum) ---
-        if "CG Accel Longitudinal" in self.channels and "CG Accel Lateral" in self.channels:
-            ax_msgs = self.channels["CG Accel Longitudinal"].messages
-            ay_msgs = self.channels["CG Accel Lateral"].messages
-            n_g = min(len(ax_msgs), len(ay_msgs))
-            if n_g >= 2:
-                time_g = [ax_msgs[i].timestamp for i in range(n_g)]
-                ax = np.array([ax_msgs[i].value for i in range(n_g)])
-                ay_g = np.array([ay_msgs[i].value for i in range(n_g)])
-                g_sum = np.sqrt(ax**2 + ay_g**2)
-                self.add_channel("G Force Combined", "G", float, 2)
-                self.channels["G Force Combined"].messages = [Message(time_g[i], g_sum[i]) for i in range(n_g)]
-
-        # --- Derive Brake Pos from Brake Press if Brake Pos is missing (5/29 algorithm: 96 kPa = 1% Brake Pos) ---
-        if "Brake Press" in self.channels and "Brake Pos" not in self.channels:
-            press_chan = self.channels["Brake Press"]
-            n_p = len(press_chan.messages)
-            if n_p > 0:
-                time_p = [m.timestamp for m in press_chan.messages]
-                press_vals = np.array([m.value for m in press_chan.messages])
-                if press_chan.units == "bar":
-                    press_vals *= 100.0
-                bpos_derived = np.clip(press_vals / 96.0, 0.0, 100.0)
-                self.add_channel("Brake Pos", "%", float, 2)
-                self.channels["Brake Pos"].messages = [Message(time_p[i], bpos_derived[i]) for i in range(n_p)]
-
-        # --- 5. Input Rates (Derivatives) ---
+    def _calculate_input_rates(self):
         self.__calculate_rate("Steering Angle", "deg/s")
         self.__calculate_rate("Throttle Pos", "%/s")
         self.__calculate_rate("Brake Pos", "%/s")
 
-        # --- 6. Dual GPS Channel Mirroring for MoTeC Workspace Compatibility ---
+    def _mirror_gps_channels(self):
         if "GPS Latitude" in self.channels and "Real GPS Latitude" not in self.channels:
             lat_chan = self.channels["GPS Latitude"]
             self.add_channel("Real GPS Latitude", "deg", float, 7)
             self.channels["Real GPS Latitude"].messages = [Message(m.timestamp, m.value) for m in lat_chan.messages]
-
         if "GPS Longitude" in self.channels and "Real GPS Longitude" not in self.channels:
             lon_chan = self.channels["GPS Longitude"]
             self.add_channel("Real GPS Longitude", "deg", float, 7)
             self.channels["Real GPS Longitude"].messages = [Message(m.timestamp, m.value) for m in lon_chan.messages]
+
+    def _mirror_throttle_accel(self):
+        if "Accelerator Pos" not in self.channels and "Throttle Pos" in self.channels:
+            src = self.channels["Throttle Pos"]
+            self.add_channel("Accelerator Pos", "%", float, 2)
+            self.channels["Accelerator Pos"].messages = [Message(m.timestamp, m.value) for m in src.messages]
+        if "Throttle Pos" not in self.channels and "Accelerator Pos" in self.channels:
+            src = self.channels["Accelerator Pos"]
+            self.add_channel("Throttle Pos", "%", float, 2)
+            self.channels["Throttle Pos"].messages = [Message(m.timestamp, m.value) for m in src.messages]
 
     def __calculate_rate(self, channel_name, unit):
         """ Internal helper to calculate the rate of change for a channel. """
@@ -223,6 +251,20 @@ class DataLog(object):
             new_name = channel_name + " Rate"
             self.add_channel(new_name, unit, float, 2)
             self.channels[new_name].messages = [Message(times[i], rate[i]) for i in range(len(times))]
+
+    def _derive_yaw_rate_from_gps_heading(self):
+        if "Chassis Yaw Rate" in self.channels:
+            return
+        gps_h_chan = self.channels.get("GPS Heading")
+        if not gps_h_chan or len(gps_h_chan.messages) < 2:
+            return
+        times = np.array([m.timestamp for m in gps_h_chan.messages])
+        headings = np.array([m.value for m in gps_h_chan.messages])
+        h_unwrapped = np.unwrap(np.radians(headings))
+        h_deg = np.degrees(h_unwrapped)
+        yaw_rate_val = -np.gradient(h_deg, times)
+        self.add_channel("Chassis Yaw Rate", "deg/s", float, 2)
+        self.channels["Chassis Yaw Rate"].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
 
     def _extract_datetime_from_text(self, log_lines, file_path=""):
         import datetime
@@ -384,6 +426,8 @@ class DataLog(object):
 
         for line in log_lines:
             stamp, bus, id, data = self.__parse_can_log_line(line)
+            if stamp is None:
+                continue
 
             if id not in known_ids:
                 continue
@@ -457,6 +501,8 @@ class DataLog(object):
             for name in invalid_channels:
                 del channel_dict[name]
                 del self.channels[name]
+            if invalid_channels:
+                channel_dict = {name: idx for idx, name in enumerate(channel_dict)}
 
     def from_racechrono_log(self, log_lines, target_lap=None):
         """ Creates channels populated with messages from a RaceChrono CSV log file.
@@ -697,20 +743,8 @@ class DataLog(object):
                 except ValueError:
                     pass
 
-        # If Chassis Yaw Rate is still missing, fallback to calculating it from GPS Heading derivative
-        if "Chassis Yaw Rate" not in self.channels and "GPS Heading" in self.channels:
-            gps_h_chan = self.channels["GPS Heading"]
-            if len(gps_h_chan.messages) >= 2:
-                times = np.array([m.timestamp for m in gps_h_chan.messages])
-                headings = np.array([m.value for m in gps_h_chan.messages])
-                dt = np.diff(times)
-                dt[dt == 0] = 0.001
-                h_unwrapped = np.unwrap(np.radians(headings))
-                h_deg = np.degrees(h_unwrapped)
-                yaw_rate_val = -np.gradient(h_deg, times)
-                
-                self.add_channel("Chassis Yaw Rate", "deg/s", float, 2)
-                self.channels["Chassis Yaw Rate"].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
+        # Fallback: derive Chassis Yaw Rate from GPS Heading derivative if missing
+        self._derive_yaw_rate_from_gps_heading()
 
         # Construct laps_info summary (with Out Lap and In Lap)
         header_beacons = []
@@ -914,6 +948,23 @@ class DataLog(object):
             def read_channel(name):
                 return z.read(prefix + name)
 
+            # RCZ binary channel naming conventions (RaceChrono internal format).
+            # Device numbers encode the sensor type:
+            #   1/200 = external GPS (RaceBox/VBOX),    1/100 = phone GPS
+            #   2/201 = dedicated accelerometer
+            #   3/202 = gyroscope
+            #   4/101 = phone IMU / secondary OBD
+            #   12/100 = primary OBD (car ECU via CAN)
+            _GPS_DEV_PFX      = ("channel_1_200_0_", "channel_1_100_0_")
+            _GPS_TS_KEYS      = ("channel_1_200_0_1_1", "channel_1_200_0_2_1")
+            _ACCEL_LAT        = "channel_2_201_0_10_0"
+            _ACCEL_LONG       = "channel_2_201_0_9_0"
+            _ACCEL_Z          = "channel_2_201_0_11_0"
+            _GYRO_Z           = "channel_3_202_0_14_0"
+            _GYRO_X           = "channel_3_202_0_12_0"
+            _OBD_DEV12_PFX    = "channel_12_100_"
+            _OBD_DEV4_TS_KEY  = "channel_4_101_0_1_1"
+
             if "session.json" not in all_names:
                 print("ERROR: Invalid RCZ file, missing session.json")
                 return
@@ -951,7 +1002,7 @@ class DataLog(object):
                 except ValueError:
                     pass
             time_file = None
-            for candidate in ["channel_1_200_0_1_1", "channel_1_200_0_2_1"]:
+            for candidate in _GPS_TS_KEYS:
                 if candidate in namelist:
                     time_file = candidate
                     break
@@ -1114,13 +1165,15 @@ class DataLog(object):
                 "laps": reconstructed_laps,
                 "total_laps": len(reconstructed_laps),
                 "fastest_lap": fastest_lap_num,
-                "fastest_time": fastest_dur if fastest_dur != float("inf") else 0.0
+                "fastest_time": fastest_dur if fastest_dur != float("inf") else 0.0,
+                "session_duration": stint_duration_s,
             }
             
             # Helper to add channel messages
             def populate_channel(name, units, values_array, decimals=2):
-                if len(values_array) != n_samples:
+                if len(values_array) < n_samples:
                     return
+                values_array = values_array[:n_samples]
                 filtered_vals = values_array[mask]
                 self.add_channel(name, units, float, decimals)
                 self.channels[name].decimals = decimals
@@ -1133,7 +1186,7 @@ class DataLog(object):
 
             # Auto-detect GPS device prefix (type 200 = external VBOX, type 100 = phone GPS)
             gps_prefix = None
-            for _pfx in ["channel_1_200_0_", "channel_1_100_0_"]:
+            for _pfx in _GPS_DEV_PFX:
                 if any(n.startswith(_pfx) for n in namelist):
                     gps_prefix = _pfx
                     break
@@ -1143,15 +1196,15 @@ class DataLog(object):
                 _spd_key = gps_prefix + "4_0"
                 if _spd_key in namelist:
                     raw_spd = np.frombuffer(read_channel(_spd_key), dtype="<i4")
-                    if len(raw_spd) == n_samples:
+                    if len(raw_spd) >= n_samples:
                         populate_channel("Ground Speed", "km/h", (raw_spd / 1000.0) * 3.6, 2)
 
                 # 3. Parse Latitude & Longitude
                 _ll_key = gps_prefix + "3_1"
                 if _ll_key in namelist:
                     raw_ll = np.frombuffer(read_channel(_ll_key), dtype="<i4")
-                    if len(raw_ll) == n_samples * 2:
-                        raw_ll = raw_ll.reshape(-1, 2)
+                    if len(raw_ll) >= n_samples * 2:
+                        raw_ll = raw_ll[:n_samples * 2].reshape(-1, 2)
                         populate_channel("GPS Latitude", "deg", raw_ll[:, 0] / 6000000.0, 7)
                         populate_channel("GPS Longitude", "deg", raw_ll[:, 1] / 6000000.0, 7)
 
@@ -1159,40 +1212,40 @@ class DataLog(object):
                 _alt_key = gps_prefix + "5_0"
                 if _alt_key in namelist:
                     raw_alt = np.frombuffer(read_channel(_alt_key), dtype="<i4")
-                    if len(raw_alt) == n_samples:
+                    if len(raw_alt) >= n_samples:
                         populate_channel("GPS Altitude", "m", raw_alt / 1000.0)
 
                 # 5. Parse GPS Heading
                 _hdg_key = gps_prefix + "6_0"
                 if _hdg_key in namelist:
                     raw_hdg = np.frombuffer(read_channel(_hdg_key), dtype="<i4")
-                    if len(raw_hdg) == n_samples:
+                    if len(raw_hdg) >= n_samples:
                         populate_channel("GPS Heading", "deg", raw_hdg / 1000.0)
 
             # 6. Parse Accelerations (device 2, type 201)
-            if "channel_2_201_0_9_0" in namelist:
-                raw_ay = np.frombuffer(read_channel("channel_2_201_0_9_0"), dtype="<i4")
-                if len(raw_ay) == n_samples:
+            if _ACCEL_LAT in namelist:
+                raw_ay = np.frombuffer(read_channel(_ACCEL_LAT), dtype="<i4")
+                if len(raw_ay) >= n_samples:
                     populate_channel("CG Accel Lateral", "G", raw_ay / 10000.0)
 
-            if "channel_2_201_0_10_0" in namelist:
-                raw_ax = np.frombuffer(read_channel("channel_2_201_0_10_0"), dtype="<i4")
-                if len(raw_ax) == n_samples:
+            if _ACCEL_LONG in namelist:
+                raw_ax = np.frombuffer(read_channel(_ACCEL_LONG), dtype="<i4")
+                if len(raw_ax) >= n_samples:
                     populate_channel("CG Accel Longitudinal", "G", raw_ax / 10000.0)
 
-            if "channel_2_201_0_11_0" in namelist:
-                raw_az = np.frombuffer(read_channel("channel_2_201_0_11_0"), dtype="<i4")
-                if len(raw_az) == n_samples:
+            if _ACCEL_Z in namelist:
+                raw_az = np.frombuffer(read_channel(_ACCEL_Z), dtype="<i4")
+                if len(raw_az) >= n_samples:
                     populate_channel("Lean Angle", "deg", raw_az / 10000.0)
 
             # 7. Parse Gyroscope / Yaw Rate (device 3, type 202)
-            if "channel_3_202_0_14_0" in namelist:
-                raw_gz = np.frombuffer(read_channel("channel_3_202_0_14_0"), dtype="<i4")
-                if len(raw_gz) == n_samples:
+            if _GYRO_Z in namelist:
+                raw_gz = np.frombuffer(read_channel(_GYRO_Z), dtype="<i4")
+                if len(raw_gz) >= n_samples:
                     populate_channel("Chassis Yaw Rate", "deg/s", (raw_gz / 1000.0) * -1.0)
-            elif "channel_3_202_0_12_0" in namelist:
-                raw_gx = np.frombuffer(read_channel("channel_3_202_0_12_0"), dtype="<i4")
-                if len(raw_gx) == n_samples:
+            elif _GYRO_X in namelist:
+                raw_gx = np.frombuffer(read_channel(_GYRO_X), dtype="<i4")
+                if len(raw_gx) >= n_samples:
                     populate_channel("x_rate_of_rotation", "", raw_gx / 1000.0)
 
             # 8. Parse OBD-II / CAN Channels
@@ -1222,7 +1275,7 @@ class DataLog(object):
 
             for name in namelist:
                 base_fname = os.path.basename(name)
-                if not base_fname.startswith("channel_12_100_") or not base_fname.endswith("_1_1"):
+                if not base_fname.startswith(_OBD_DEV12_PFX) or not base_fname.endswith("_1_1"):
                     continue
                 parts = base_fname.split("_")
                 pid = parts[3]
@@ -1243,13 +1296,17 @@ class DataLog(object):
                 rel_times = (raw_times - stint_uptime_start) / 1000.0
                 if rel_times[-1] <= 0:
                     continue
-                values = np.interp(times_sec, rel_times, raw_values)
+                if pid == "1004":
+                    values = _interp_zoh(times_sec, rel_times, raw_values)
+                else:
+                    values = np.interp(times_sec, rel_times, raw_values)
                 if pid in rcz_pid_map:
                     ch_name, ch_unit, ch_scale, ch_offset = rcz_pid_map[pid]
-                    vals_processed = values * ch_scale + ch_offset
-                    if pid == "1004":
-                        vals_processed = np.round(vals_processed).clip(-1, 6)
-                    populate_channel(ch_name, ch_unit, vals_processed)
+                    if ch_name not in self.channels:
+                        vals_processed = values * ch_scale + ch_offset
+                        if pid == "1004":
+                            vals_processed = np.round(vals_processed).clip(-1, 6)
+                        populate_channel(ch_name, ch_unit, vals_processed)
                 else:
                     populate_channel(f"OBD_{pid}", "", values)
 
@@ -1260,22 +1317,18 @@ class DataLog(object):
             # the GR86-ECU meaning of the same PIDs on device 12/type 100.
             _G = 9.80665
             rcz_dev4_pid_overrides = {
-                # PID 7 on device 4 = phone lateral accelerometer (m/s²), NOT ECU Roll Angle
+                # PID 7 on device 4 = phone lateral accelerometer (m/s^2), NOT ECU Roll Angle
                 "7":  ("CG Accel Lateral",     "G",    1.0 / _G, 0.0),
-                # PID 8 on device 4 = phone vertical accelerometer (m/s², includes gravity) — skip
+                # PID 8 on device 4 = phone vertical accelerometer (m/s^2, includes gravity) — skip
                 "8":  None,
-                # PID 49 on device 4 = phone longitudinal accelerometer (m/s²)
-                "49": ("CG Accel Longitudinal", "G",    1.0 / _G, 0.0),
-                # PID 50 — weaker correlation with any axis; skip
-                "50": None,
             }
-            dev4_ts_key = "channel_4_101_0_1_1"
+            dev4_ts_key = _OBD_DEV4_TS_KEY
             dir_prefix = os.path.dirname(dev4_ts_key)
             if any(os.path.basename(n) == os.path.basename(dev4_ts_key) and
                    os.path.dirname(n) == dir_prefix for n in namelist):
                 actual_key = next(
                     n for n in namelist
-                    if os.path.basename(n) == "channel_4_101_0_1_1"
+                    if os.path.basename(n) == os.path.basename(_OBD_DEV4_TS_KEY)
                 )
                 raw_obd4_ts = np.frombuffer(read_channel(actual_key), dtype="<i4")
                 if len(raw_obd4_ts) >= 2 and len(raw_obd4_ts) % 2 == 0:
@@ -1309,7 +1362,10 @@ class DataLog(object):
                             continue
                         rel_t = obd4_rel_times[:count]
                         vals = value_data[:count]
-                        interpolated = np.interp(times_sec, rel_t, vals)
+                        if pid == "1004":
+                            interpolated = _interp_zoh(times_sec, rel_t, vals)
+                        else:
+                            interpolated = np.interp(times_sec, rel_t, vals)
                         processed = interpolated * ch_scale + ch_offset
                         if pid == "1004":
                             processed = np.round(processed).clip(-1, 6)
@@ -1317,17 +1373,7 @@ class DataLog(object):
                             populate_channel(ch_name, ch_unit, processed)
 
         # Fallback for Chassis Yaw Rate if missing
-        if "Chassis Yaw Rate" not in self.channels and "GPS Heading" in self.channels:
-            gps_h_chan = self.channels["GPS Heading"]
-            if len(gps_h_chan.messages) >= 2:
-                times = np.array([m.timestamp for m in gps_h_chan.messages])
-                headings = np.array([m.value for m in gps_h_chan.messages])
-                h_unwrapped = np.unwrap(np.radians(headings))
-                h_deg = np.degrees(h_unwrapped)
-                yaw_rate_val = -np.gradient(h_deg, times)
-                
-                self.add_channel("Chassis Yaw Rate", "deg/s", float, 2)
-                self.channels["Chassis Yaw Rate"].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
+        self._derive_yaw_rate_from_gps_heading()
 
     def from_accessport_log(self, log_lines):
         """ Creates channels populated with messages from a COBB Accessport CSV log file.
@@ -1350,7 +1396,6 @@ class DataLog(object):
         # Update all the channel names and units
         for channel_name, channel in self.channels.items():
             # Channels have the format "Name (Units)"
-            print(channel_name)
             name, units = channel_name.split(" (")
             units = units[:-1]
 
@@ -1359,16 +1404,15 @@ class DataLog(object):
 
     @staticmethod
     def __parse_can_log_line(line):
-        """ Extracts the timestamp, bus, arbitration id, and data from a single line in a can log file
-        recorded with candump -l.
-        """
-        stamp, bus, msg = line.split()
-        stamp = float(stamp[1:-1])
-        id, data = msg.split("#")
-        id = int(id, 16)
-        data = bytearray.fromhex(data)
-
-        return stamp, bus, id, data
+        try:
+            stamp, bus, msg = line.split()
+            stamp = float(stamp[1:-1])
+            can_id, data = msg.split("#")
+            can_id = int(can_id, 16)
+            data = bytearray.fromhex(data)
+            return stamp, bus, can_id, data
+        except (ValueError, IndexError):
+            return None, None, None, None
 
     def __str__(self):
         output = "Log: %s, Duration: %f s" % (self.name, (self.end() - self.start()))
@@ -1389,16 +1433,10 @@ class Channel(object):
             self.messages = []
 
     def start(self):
-        if self.messages:
-            return self.messages[0].timestamp
-        else:
-            return 0
+        return self.messages[0].timestamp if self.messages else math.inf
 
     def end(self):
-        if self.messages:
-            return self.messages[-1].timestamp
-        else:
-            return 0
+        return self.messages[-1].timestamp if self.messages else -math.inf
 
     def avg_frequency(self):
         """ Computes the average frequency from the samples based on the duration of the channel
@@ -1410,45 +1448,24 @@ class Channel(object):
             return 0
 
     def resample(self, start_time, end_time, frequency):
-        """ Resamples the data such that all messages occur at a fixed frequency.
-
-        If multiple messages fall within the time interval between messages for the new frequency,
-        the latest message will be used. When no existing messages fall within the time interval
-        the most recent value will be retained. If no existing message is present within the first
-        new time interval, then the first message will be initialized at 0.
-        """
         if not self.messages:
             return
 
-        # Determine how many messages this channel should have,
         num_msgs = math.floor(frequency * (end_time - start_time))
+        if num_msgs < 1:
+            return
         dt_step = 1.0 / frequency
 
-        # Create a new message at each time new time point based on the frequency. As we step
-        # through the new sample points we'll find the latest pre existing message to insert there,
-        # and will hold that value until we find another message.
-        value = 0
-        t = start_time
-        current_msgs_index = 0
-        new_msgs = []
-        for i in range(num_msgs):
-            # Grab the latest message that falls in this time window, if there is one, and update
-            # the current channel value
-            while current_msgs_index < len(self.messages):
-                msg_stamp = self.messages[current_msgs_index].timestamp
+        src_t = np.array([m.timestamp for m in self.messages])
+        src_v = np.array([m.value for m in self.messages])
+        new_t = start_time + dt_step * np.arange(num_msgs)
 
-                if msg_stamp < t + 0.5 * dt_step:
-                    # This message falls in the time window
-                    value = self.messages[current_msgs_index].value
-                    current_msgs_index += 1
-                else:
-                    # This messages belongs in a future window
-                    break
+        if self.name in DISCRETE_CHANNELS:
+            new_v = _interp_zoh(new_t, src_t, src_v)
+        else:
+            new_v = np.interp(new_t, src_t, src_v)
 
-            new_msgs.append(Message(t, value))
-            t += dt_step
-
-        self.messages = new_msgs
+        self.messages = [Message(float(new_t[i]), float(new_v[i])) for i in range(num_msgs)]
 
     def __str__(self):
         return "Channel: %s, Units: %s, Decimals: %d, Messages: %d, Frequency: %.2f Hz" % \
@@ -1456,7 +1473,7 @@ class Channel(object):
 
 class Message(object):
     """ A single message in a time series of data. """
-    def __init__(self, timestamp=0, value=0):
+    def __init__(self, timestamp: float = 0.0, value: float = 0.0):
         self.timestamp = float(timestamp)
         self.value = float(value)
 
