@@ -203,8 +203,6 @@ def _process_one(args, stint_override=None, output_override=None):
         ld_filename = os.path.join(candump_dir, candump_filename + ".ld")
 
     ldx_filename = os.path.splitext(ld_filename)[0] + ".ldx"
-    gpx_filename = os.path.splitext(ld_filename)[0] + ".gpx"
-    kml_filename = os.path.splitext(ld_filename)[0] + ".kml"
 
     output_dir = os.path.dirname(ld_filename)
     if output_dir and not os.path.isdir(output_dir):
@@ -217,10 +215,15 @@ def _process_one(args, stint_override=None, output_override=None):
     print("Saved .ld file: %s" % ld_filename)
     print("Saved .ldx file: %s" % ldx_filename)
 
-    if motec_log.write_gpx(gpx_filename, data_log):
-        print("Saved .gpx track file: %s" % gpx_filename)
-    if motec_log.write_kml(kml_filename, data_log):
-        print("Saved .kml Google Earth file: %s" % kml_filename)
+    if args.gpx:
+        gpx_filename = os.path.splitext(ld_filename)[0] + ".gpx"
+        if motec_log.write_gpx(gpx_filename, data_log):
+            print("Saved .gpx track file: %s" % gpx_filename)
+
+    if args.kml:
+        kml_filename = os.path.splitext(ld_filename)[0] + ".kml"
+        if motec_log.write_kml(kml_filename, data_log):
+            print("Saved .kml Google Earth file: %s" % kml_filename)
 
     print("Done!")
 
@@ -235,6 +238,8 @@ if __name__ == '__main__':
                         help="Name of output file, defaults to the same filename as 'log'")
     parser.add_argument("--frequency", type=str, default="auto",
                         help="Fixed frequency to resample all channels at (e.g. 20, 25, 50, 100 or 'auto', default: auto)")
+    parser.add_argument("--gpx", action="store_true", help="Also generate GPX track file")
+    parser.add_argument("--kml", action="store_true", help="Also generate KML Google Earth track file")
     parser.add_argument("--dbc", type=str, help="Path to DBC file, required if log type CAN")
 
     parser.add_argument("--lap", type=str, default="all",
