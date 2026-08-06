@@ -55,7 +55,7 @@ VENUE_NORMALIZE = {
 def _normalize_venue(name):
     if not name:
         return name
-    clean_name = name.replace(".csv", "").replace(".rcz", "")
+    clean_name = name.replace(".csv", "").replace(".rcz", "").replace(",", " ")
     lower_search = clean_name.lower().replace("_", " ").replace("-", " ")
 
     for key in sorted(VENUE_NORMALIZE.keys(), key=len, reverse=True):

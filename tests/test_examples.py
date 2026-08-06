@@ -210,7 +210,7 @@ def test_sector_beacons_detection():
         Message(0.0, -122.0002), Message(1.0, -122.0), Message(2.0, -122.0002),
         Message(10.0, -122.0003), Message(11.0, -122.0001), Message(12.0, -122.0003)
     ]
-    beacons = log.detect_beacons()
+    beacons = log.detect_beacons(min_speed_kmh=0.0, min_time_sec=0.0)
     assert len(beacons) >= 2
     assert beacons[0][1] in ("Start/Finish", "Split 1")
 

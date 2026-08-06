@@ -97,7 +97,7 @@ class DataLog(object):
             self.channels[channel_name].resample(start, end, frequency)
         return frequency
 
-    def detect_beacons(self):
+    def detect_beacons(self, min_speed_kmh=30.0, min_time_sec=15.0):
         """ Detects trap / sector crossing timestamps from GPS coordinates and traps metadata. """
         if not getattr(self, "traps", None):
             return []
@@ -109,9 +109,13 @@ class DataLog(object):
         if not lat_m or not lon_m or len(lat_m) != len(lon_m):
             return []
 
+        spd_m = self.channels.get("Ground Speed")
+        spd_vals = np.array([m.value for m in spd_m.messages]) if spd_m else None
+
         lat = np.array([m.value for m in lat_m])
         lon = np.array([m.value for m in lon_m])
         times = np.array([m.timestamp for m in lat_m])
+        dur = self.duration()
 
         beacons = []
         for t in self.traps:
@@ -125,6 +129,13 @@ class DataLog(object):
             dist = np.sqrt(d_lat**2 + d_lon**2)
 
             for i in range(1, len(dist) - 1):
+                # Speed & boundary guards: ignore false crossings while stationary/pitting
+                # or near session start/end
+                if spd_vals is not None and spd_vals[i] < min_speed_kmh:
+                    continue
+                if times[i] < min_time_sec or (dur > 0 and (dur - times[i]) < 5.0):
+                    continue
+
                 if dist[i] < 30.0 and dist[i] <= dist[i - 1] and dist[i] <= dist[i + 1]:
                     beacons.append((float(times[i]), t_name))
 
