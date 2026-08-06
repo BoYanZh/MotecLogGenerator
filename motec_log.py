@@ -129,34 +129,50 @@ class MotecLog(object):
         layer = ET.SubElement(layers, "Layer")
 
         marker_block = ET.SubElement(layer, "MarkerBlock")
-        marker_group = ET.SubElement(marker_block, "MarkerGroup", {"Name": "Beacons", "Index": "3"})
+        beacon_group = ET.SubElement(marker_block, "MarkerGroup", {"Name": "Beacons", "Index": "3"})
 
-        beacons_to_write = []
+        lap_beacons = []
+        split_beacons = []
+
         if beacons:
-            beacons_to_write = beacons
-        elif laps_info and "beacons" in laps_info:
-            beacons_to_write = laps_info["beacons"]
-        else:
+            for item in beacons:
+                b_time = item[0] if isinstance(item, (tuple, list)) else item
+                b_name = item[1] if isinstance(item, (tuple, list)) and len(item) > 1 else "Beacon"
+                if str(b_name).strip().lower() in ("start/finish", "start", "finish", "sf"):
+                    lap_beacons.append((b_time, b_name))
+                else:
+                    split_beacons.append((b_time, b_name))
+
+        if not lap_beacons:
             laps = laps_info.get("laps", []) if laps_info and "laps" in laps_info else []
             if len(laps) > 1:
                 for idx, lap in enumerate(laps[:-1]):
                     end_t = lap.get("end_time", 0.0)
                     if end_t > 1.0:
-                        beacons_to_write.append((end_t, f"Manual.{idx + 1}"))
+                        lap_beacons.append((end_t, f"Manual.{idx + 1}"))
 
-        for idx, item in enumerate(beacons_to_write):
-            if isinstance(item, (tuple, list)):
-                b_time, b_name = item[0], item[1]
-            else:
-                b_time, b_name = item, f"Manual.{idx + 1}"
+        for idx, (b_time, b_name) in enumerate(lap_beacons):
             t_us = b_time * 1e6
-            ET.SubElement(marker_group, "Marker", {
+            marker_name = f"Manual.{idx + 1}" if "manual" in str(b_name).lower() else str(b_name)
+            ET.SubElement(beacon_group, "Marker", {
                 "Version": "100",
                 "ClassName": "BCN",
-                "Name": str(b_name),
+                "Name": marker_name,
                 "Flags": "77",
                 "Time": f"{t_us:.17e}"
             })
+
+        if split_beacons:
+            section_group = ET.SubElement(marker_block, "MarkerGroup", {"Name": "Sections", "Index": "4"})
+            for idx, (b_time, b_name) in enumerate(split_beacons):
+                t_us = b_time * 1e6
+                ET.SubElement(section_group, "Marker", {
+                    "Version": "100",
+                    "ClassName": "BCN",
+                    "Name": str(b_name),
+                    "Flags": "77",
+                    "Time": f"{t_us:.17e}"
+                })
 
         ET.SubElement(layer, "RangeBlock")
 
