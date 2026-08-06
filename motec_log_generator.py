@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 import zipfile
 
@@ -39,10 +40,14 @@ def _get_stints(rcz_path):
 
 
 VENUE_NORMALIZE = {
+    "thunderhill raceway park": "Thunderhill Raceway Park",
+    "thunder hill raceway park": "Thunderhill Raceway Park",
     "thunderhill": "Thunderhill Raceway Park",
     "thunder hill": "Thunderhill Raceway Park",
     "thill": "Thunderhill Raceway Park",
+    "laguna seca": "Laguna Seca",
     "laguna": "Laguna Seca",
+    "sonoma raceway": "Sonoma Raceway",
     "sonoma": "Sonoma Raceway",
 }
 
@@ -50,19 +55,37 @@ VENUE_NORMALIZE = {
 def _normalize_venue(name):
     if not name:
         return name
-    lower = name.lower()
-    for key, canonical in VENUE_NORMALIZE.items():
-        if key in lower:
-            # Preserve layout suffix: "Thunder Hill East Bypass" -> "Thunderhill Raceway Park (East Bypass)"
-            idx = lower.index(key) + len(key)
-            suffix = name[idx:].strip().strip("-").replace(",", " ").replace("_", " ")
-            suffix = " ".join(suffix.split())
-            for abbr, full in [("EST", "East"), ("est", "East"),
-                                ("BY", "Bypass"), ("by", "Bypass")]:
-                suffix = suffix.replace(abbr, full)
+    clean_name = name.replace(".csv", "").replace(".rcz", "")
+    lower_search = clean_name.lower().replace("_", " ").replace("-", " ")
+
+    for key in sorted(VENUE_NORMALIZE.keys(), key=len, reverse=True):
+        if key in lower_search:
+            canonical = VENUE_NORMALIZE[key]
+            idx = lower_search.index(key) + len(key)
+            raw_suffix = clean_name.replace("_", " ").replace("-", " ")[idx:].strip()
+
+            # Truncate at common filename separators
+            raw_suffix = re.split(r"\s+-\s+|\s+_\s+|\s+\d{4}\b", raw_suffix)[0].strip()
+
+            # Clean up generic track suffix words if canonical already contains them
+            for generic in ["raceway park", "raceway", "park", "track", "seca"]:
+                if raw_suffix.lower().startswith(generic):
+                    raw_suffix = raw_suffix[len(generic):].strip()
+
+            # Clean up trailing file artifacts
+            raw_suffix = re.sub(r"\blap\s*\d+.*$", "", raw_suffix, flags=re.IGNORECASE).strip()
+            raw_suffix = re.sub(r"\bv\d+.*$", "", raw_suffix, flags=re.IGNORECASE).strip()
+            raw_suffix = re.sub(r"\bstint\s*\d+.*$", "", raw_suffix, flags=re.IGNORECASE).strip()
+
+            suffix = " ".join(raw_suffix.split())
+            for abbr, full in [("EST", "East"), ("BY", "Bypass"), ("EB", "East Bypass"),
+                                ("CCW", "CCW"), ("CW", "CW")]:
+                suffix = re.sub(r"\b" + abbr + r"\b", full, suffix, flags=re.IGNORECASE)
+
             suffix = " ".join(suffix.split())
             if suffix:
-                return f"{canonical} ({suffix})"
+                formatted_suffix = suffix.title() if (suffix.islower() or suffix.isupper()) and len(suffix) > 3 else suffix
+                return f"{canonical} ({formatted_suffix})"
             return canonical
     return name
 
@@ -98,7 +121,7 @@ def _process_one(args, stint_override=None, output_override=None):
         with open(args.log, "r") as file:
             lines = file.readlines()
         print("Extracting data...")
-        data_log.from_csv_log(lines)
+        data_log.from_csv_log(lines, target_lap=args.lap)
     elif args.log_type == "ACCESSPORT":
         with open(args.log, "r") as file:
             lines = file.readlines()
@@ -137,18 +160,12 @@ def _process_one(args, stint_override=None, output_override=None):
         venue_name = data_log.rcz_metadata.get("trackName")
 
     if not venue_name:
-        filename = os.path.basename(args.log).lower()
-        if "thunder_hill" in filename or "thunderhill" in filename:
-            venue_name = "Thunderhill Raceway Park"
-        elif "laguna_seca" in filename:
-            venue_name = "Laguna Seca"
-        elif "sonoma" in filename:
-            venue_name = "Sonoma Raceway"
-        else:
-            # Try Session/event_session metadata field as venue hint
-            venue_name = meta.get("event_session", meta.get("Session", ""))
-
-    venue_name = _normalize_venue(venue_name)
+        filename = os.path.basename(args.log)
+        venue_name = _normalize_venue(filename)
+        if venue_name == filename:
+            venue_name = _normalize_venue(meta.get("event_session", meta.get("Session", "")))
+    else:
+        venue_name = _normalize_venue(venue_name)
 
     event_name = args.event_name if args.event_name else meta.get("event_name", "")
     if not event_name and venue_name:
