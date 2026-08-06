@@ -122,7 +122,8 @@ def _process_one(args, stint_override=None, output_override=None):
     for channel_name, channel in data_log.channels.items():
         print("\t%s" % channel)
 
-    data_log.resample(args.frequency)
+    resample_freq = data_log.resample(args.frequency)
+    print("Resampled channels at %.1f Hz..." % resample_freq)
 
     print("Calculating advanced math channels...")
     data_log.calculate_math_channels()
@@ -214,8 +215,8 @@ if __name__ == '__main__':
 
     parser.add_argument("--output", type=str,
                         help="Name of output file, defaults to the same filename as 'log'")
-    parser.add_argument("--frequency", type=float, default=100.0,
-                        help="Fixed frequency to resample all channels at")
+    parser.add_argument("--frequency", type=str, default="auto",
+                        help="Fixed frequency to resample all channels at (e.g. 20, 25, 50, 100 or 'auto', default: auto)")
     parser.add_argument("--dbc", type=str, help="Path to DBC file, required if log type CAN")
 
     parser.add_argument("--lap", type=str, default="all",
@@ -236,9 +237,14 @@ if __name__ == '__main__':
     parser.add_argument("--short_comment", type=str, default="", help="Motec log metadata field")
     args = parser.parse_args()
 
-    if args.frequency <= 0:
-        print("ERROR: --frequency must be positive")
-        sys.exit(1)
+    if str(args.frequency).lower() != "auto":
+        try:
+            if float(args.frequency) <= 0:
+                print("ERROR: --frequency must be positive or 'auto'")
+                sys.exit(1)
+        except ValueError:
+            print("ERROR: Invalid --frequency value '%s'. Must be a number or 'auto'" % args.frequency)
+            sys.exit(1)
 
     if args.log:
         args.log = os.path.expanduser(args.log)

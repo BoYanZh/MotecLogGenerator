@@ -68,7 +68,7 @@ usage: motec_log_generator.py [-h] [--output OUTPUT] [--frequency FREQUENCY]
 
 Options:
   --output OUTPUT          Path for output .ld file (default: same directory as input log)
-  --frequency FREQUENCY    Fixed frequency to resample all channels at (default: 20.0 Hz)
+  --frequency FREQUENCY    Fixed frequency to resample all channels at or 'auto' (default: auto)
   --min_lap_sec MIN_LAP    Minimum valid lap duration in seconds to filter noise (default: 15.0s)
   --lap LAP                Specific lap number to export (e.g. 1, 15) or 'all' (default: all)
   --stint STINT            Specific RCZ stint to export or 'all' for auto-split (default: all)

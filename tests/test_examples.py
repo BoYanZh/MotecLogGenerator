@@ -187,6 +187,17 @@ def test_gear_preserved_after_resample():
         assert float(m.value).is_integer(), f"Non-integer gear value: {m.value}"
 
 
+def test_auto_frequency_detection():
+    log = DataLog()
+    log.from_csv_log(_read_lines("csv_sample.csv"))
+    freq = log.detect_native_frequency()
+    assert freq > 0, f"Invalid auto frequency: {freq}"
+    resampled_f = log.resample("auto")
+    assert resampled_f == freq
+    for ch in log.channels.values():
+        assert len(ch.messages) > 0, f"Channel {ch.name} empty after auto resample"
+
+
 def pytest_if_available():
     """Return the pytest module if available, None otherwise (for standalone runs)."""
     try:

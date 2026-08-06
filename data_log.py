@@ -56,15 +56,44 @@ class DataLog(object):
         e = self.end()
         return max(0.0, e - s)
 
-    def resample(self, frequency):
+    def detect_native_frequency(self) -> float:
+        """ Detects the primary native sampling frequency of the log data. """
+        candidates = ["Ground Speed", "GPS Latitude", "Running Time", "CG Accel Lateral", "Engine RPM"]
+        raw_freq = 0.0
+        for name in candidates:
+            if name in self.channels and len(self.channels[name].messages) > 1:
+                raw_freq = self.channels[name].avg_frequency()
+                if raw_freq > 0:
+                    break
+        if raw_freq <= 0:
+            all_freqs = [c.avg_frequency() for c in self.channels.values() if len(c.messages) > 1]
+            raw_freq = max(all_freqs) if all_freqs else 25.0
+
+        # Snap to standard logging rates if close (within 10%), otherwise round cleanly
+        for std_rate in [10.0, 20.0, 25.0, 50.0, 100.0, 200.0]:
+            if abs(raw_freq - std_rate) / std_rate <= 0.10:
+                return std_rate
+
+        return max(1.0, round(raw_freq, 1))
+
+    def resample(self, frequency="auto"):
         """ Resamples all channels such that all messages occur at a fixed frequency.
 
-        See the resample method of the Channel class for more details.
+        frequency: float, int, or 'auto' (detects native sample rate, e.g. 20Hz, 25Hz, 50Hz).
+        Returns the frequency used for resampling.
         """
+        if isinstance(frequency, str) and frequency.lower() == "auto":
+            frequency = self.detect_native_frequency()
+        elif frequency is None or (isinstance(frequency, (int, float)) and frequency <= 0):
+            frequency = self.detect_native_frequency()
+        else:
+            frequency = float(frequency)
+
         start = self.start()
         end = self.end()
         for channel_name in self.channels:
             self.channels[channel_name].resample(start, end, frequency)
+        return frequency
 
     def calculate_math_channels(self):
         self._derive_cg_accel_lateral()
