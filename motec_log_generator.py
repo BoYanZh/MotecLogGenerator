@@ -195,7 +195,8 @@ def _process_one(args, stint_override=None, output_override=None):
         os.makedirs(output_dir)
 
     motec_log.write(ld_filename)
-    motec_log.write_ldx(ldx_filename, getattr(data_log, "laps_info", None))
+    beacons = data_log.detect_beacons()
+    motec_log.write_ldx(ldx_filename, getattr(data_log, "laps_info", None), beacons=beacons)
     print("Saved .ld file: %s" % ld_filename)
     print("Saved .ldx file: %s" % ldx_filename)
 

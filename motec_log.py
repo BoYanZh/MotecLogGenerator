@@ -116,7 +116,8 @@ class MotecLog(object):
         ld_data.channs[-1].next_meta_ptr = 0
         ld_data.write(filename)
 
-    def write_ldx(self, ldx_filename, laps_info=None):
+    def write_ldx(self, filename, laps_info=None, beacons=None):
+        """ Writes an XML .ldx file containing lap markers, sector beacons, and metadata details. """
         import xml.etree.ElementTree as ET
 
         root = ET.Element("LDXFile", {
@@ -130,21 +131,29 @@ class MotecLog(object):
         marker_block = ET.SubElement(layer, "MarkerBlock")
         marker_group = ET.SubElement(marker_block, "MarkerGroup", {"Name": "Beacons", "Index": "3"})
 
-        laps = laps_info.get("laps", []) if laps_info and "laps" in laps_info else []
-        beacon_times = []
-        if len(laps) > 1:
-            for lap in laps[:-1]:
-                end_t = lap.get("end_time", 0.0)
-                if end_t > 1.0:
-                    beacon_times.append(end_t)
+        beacons_to_write = []
+        if beacons:
+            beacons_to_write = beacons
+        elif laps_info and "beacons" in laps_info:
+            beacons_to_write = laps_info["beacons"]
+        else:
+            laps = laps_info.get("laps", []) if laps_info and "laps" in laps_info else []
+            if len(laps) > 1:
+                for idx, lap in enumerate(laps[:-1]):
+                    end_t = lap.get("end_time", 0.0)
+                    if end_t > 1.0:
+                        beacons_to_write.append((end_t, f"Manual.{idx + 1}"))
 
-        for idx, b_time in enumerate(beacon_times):
+        for idx, item in enumerate(beacons_to_write):
+            if isinstance(item, (tuple, list)):
+                b_time, b_name = item[0], item[1]
+            else:
+                b_time, b_name = item, f"Manual.{idx + 1}"
             t_us = b_time * 1e6
-            marker_name = f"Manual.{idx + 1}"
             ET.SubElement(marker_group, "Marker", {
                 "Version": "100",
                 "ClassName": "BCN",
-                "Name": marker_name,
+                "Name": str(b_name),
                 "Flags": "77",
                 "Time": f"{t_us:.17e}"
             })
@@ -196,7 +205,7 @@ class MotecLog(object):
 
         ET.indent(root, space="  ")
         xml_str = ET.tostring(root, encoding="unicode")
-        with open(ldx_filename, "w", encoding="utf-8") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(xml_str)
 
     @staticmethod

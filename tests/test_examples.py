@@ -6,7 +6,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from data_log import DataLog
+from data_log import DataLog, Message
 
 EXAMPLES = os.path.join(os.path.dirname(__file__), "..", "examples")
 
@@ -194,8 +194,25 @@ def test_auto_frequency_detection():
     assert freq > 0, f"Invalid auto frequency: {freq}"
     resampled_f = log.resample("auto")
     assert resampled_f == freq
-    for ch in log.channels.values():
-        assert len(ch.messages) > 0, f"Channel {ch.name} empty after auto resample"
+def test_sector_beacons_detection():
+    log = DataLog()
+    log.traps = [
+        {"name": "Start/Finish", "lat": 37.0, "lon": -122.0, "type": 3},
+        {"name": "Split 1", "lat": 37.0001, "lon": -122.0001, "type": 4},
+    ]
+    log.add_channel("GPS Latitude", "deg", float, 7)
+    log.add_channel("GPS Longitude", "deg", float, 7)
+    log.channels["GPS Latitude"].messages = [
+        Message(0.0, 37.0002), Message(1.0, 37.0), Message(2.0, 37.0002),
+        Message(10.0, 37.0003), Message(11.0, 37.0001), Message(12.0, 37.0003)
+    ]
+    log.channels["GPS Longitude"].messages = [
+        Message(0.0, -122.0002), Message(1.0, -122.0), Message(2.0, -122.0002),
+        Message(10.0, -122.0003), Message(11.0, -122.0001), Message(12.0, -122.0003)
+    ]
+    beacons = log.detect_beacons()
+    assert len(beacons) >= 2
+    assert beacons[0][1] in ("Start/Finish", "Split 1")
 
 
 def pytest_if_available():

@@ -22,11 +22,13 @@ class DataLog(object):
         self.channels = {}
         self.datetime = None
         self.metadata = {}
+        self.traps = []
 
     def clear(self):
         self.channels = {}
         self.datetime = None
         self.metadata = {}
+        self.traps = []
 
     def add_channel(self, name, units, data_type, decimals, initial_message=None):
         if any(k in name.lower() for k in ["latitude", "longitude", "lat", "lon"]):
@@ -94,6 +96,40 @@ class DataLog(object):
         for channel_name in self.channels:
             self.channels[channel_name].resample(start, end, frequency)
         return frequency
+
+    def detect_beacons(self):
+        """ Detects trap / sector crossing timestamps from GPS coordinates and traps metadata. """
+        if not getattr(self, "traps", None):
+            return []
+        if "GPS Latitude" not in self.channels or "GPS Longitude" not in self.channels:
+            return []
+
+        lat_m = self.channels["GPS Latitude"].messages
+        lon_m = self.channels["GPS Longitude"].messages
+        if not lat_m or not lon_m or len(lat_m) != len(lon_m):
+            return []
+
+        lat = np.array([m.value for m in lat_m])
+        lon = np.array([m.value for m in lon_m])
+        times = np.array([m.timestamp for m in lat_m])
+
+        beacons = []
+        for t in self.traps:
+            t_lat = t["lat"]
+            t_lon = t["lon"]
+            t_name = t["name"]
+
+            # Flat earth distance approximation (meters around ~35-45 deg lat)
+            d_lat = (lat - t_lat) * 111000.0
+            d_lon = (lon - t_lon) * 86000.0
+            dist = np.sqrt(d_lat**2 + d_lon**2)
+
+            for i in range(1, len(dist) - 1):
+                if dist[i] < 30.0 and dist[i] <= dist[i - 1] and dist[i] <= dist[i + 1]:
+                    beacons.append((float(times[i]), t_name))
+
+        beacons.sort(key=lambda x: x[0])
+        return beacons
 
     def calculate_math_channels(self):
         self._derive_cg_accel_lateral()
@@ -1000,6 +1036,21 @@ class DataLog(object):
 
             session_json = json.loads(z.read("session.json").decode("utf-8"))
             first_t = session_json.get("firstTimestamp", 0)
+
+            if "trackId.json" in all_names:
+                try:
+                    track_json = json.loads(z.read("trackId.json").decode("utf-8"))
+                    traps_list = track_json.get("track", {}).get("traps", [])
+                    for t in traps_list:
+                        if "centerLatitude" in t and "centerLongitude" in t:
+                            self.traps.append({
+                                "name": t.get("name", "Split"),
+                                "lat": t["centerLatitude"] / 6000000.0,
+                                "lon": t["centerLongitude"] / 6000000.0,
+                                "type": t.get("type", 4)
+                            })
+                except Exception:
+                    pass
 
             ts_ms = session_json.get("timeCreated") or session_json.get("firstTimestamp")
             if ts_ms and ts_ms > 1e8:
