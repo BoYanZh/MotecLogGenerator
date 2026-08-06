@@ -158,12 +158,34 @@ class DataLog(object):
     def calculate_math_channels(self):
         self._derive_cg_accel_lateral()
         self._derive_cg_accel_longitudinal()
+        self._derive_smoothed_accel()
         self._calculate_kinematics()
         self._calculate_g_sum()
         self._derive_brake_pos()
         self._calculate_input_rates()
         self._mirror_throttle_accel()
         self._mirror_gps_channels()
+
+    def _derive_smoothed_accel(self, window_sec=0.5):
+        """ Derive 0.5s moving average smoothed G channels for clean G-G diagrams in MoTeC. """
+        for raw_name, smooth_name in [("CG Accel Lateral", "CG Accel Lateral Smooth"),
+                                      ("CG Accel Longitudinal", "CG Accel Long Smooth")]:
+            if raw_name in self.channels and smooth_name not in self.channels:
+                ch = self.channels[raw_name]
+                if len(ch.messages) < 5:
+                    continue
+                freq = ch.avg_frequency()
+                w = max(1, int(window_sec * freq))
+                vals = np.array([m.value for m in ch.messages], dtype=np.float64)
+
+                padded = np.pad(vals, (w // 2, w - 1 - w // 2), mode="edge")
+                windows = np.lib.stride_tricks.sliding_window_view(padded, w)
+                smoothed = np.mean(windows, axis=1)[:len(vals)]
+
+                self.add_channel(smooth_name, ch.units, float, ch.decimals)
+                self.channels[smooth_name].messages = [
+                    Message(ch.messages[i].timestamp, float(smoothed[i])) for i in range(len(vals))
+                ]
 
     def _derive_cg_accel_lateral(self):
         if "CG Accel Lateral" in self.channels:

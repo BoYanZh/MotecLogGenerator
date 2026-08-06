@@ -280,6 +280,40 @@ if __name__ == '__main__':
         print("WARNING: Overriding --log_type '%s' to 'RCZ' because input file has .rcz extension" % args.log_type)
         args.log_type = "RCZ"
 
+    if os.path.isdir(args.log):
+        dir_path = args.log
+        ext_filter = ".rcz" if args.log_type == "RCZ" else ".csv"
+        matching_files = sorted([
+            os.path.join(dir_path, f) for f in os.listdir(dir_path)
+            if f.lower().endswith(ext_filter)
+        ])
+        if not matching_files:
+            print("ERROR: No %s files found in directory '%s'" % (ext_filter, dir_path))
+            sys.exit(1)
+
+        print("Found %d %s files in '%s'..." % (len(matching_files), ext_filter, dir_path))
+        for fpath in matching_files:
+            print("\n" + "=" * 80)
+            print("Processing: %s" % fpath)
+            args.log = fpath
+            args.output = None
+            if args.log_type == "RCZ" and str(args.stint).lower() == "all":
+                try:
+                    stints = _get_stints(fpath)
+                except Exception as e:
+                    print("ERROR: Failed to read RCZ stints in %s: %s" % (fpath, e))
+                    continue
+                if len(stints) > 1:
+                    base_name, _ = os.path.splitext(fpath)
+                    for st in stints:
+                        st_out = f"{base_name}_stint{st}"
+                        print("\n=== Exporting Stint %s -> %s ===" % (st, st_out))
+                        _process_one(args, stint_override=str(st), output_override=st_out)
+                    continue
+            _process_one(args)
+        print("\nBatch directory processing complete.")
+        sys.exit(0)
+
     if not os.path.isfile(args.log):
         print("ERROR: log file %s does not exist" % args.log)
         sys.exit(1)

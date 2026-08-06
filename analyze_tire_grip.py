@@ -102,11 +102,23 @@ def analyze_session(fpath, min_spd=60.0, window_sec=1.0):
     }, None
 
 
+def load_tire_map(path="tire_map.json"):
+    import json
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dir", default="data/exported", help="Directory of .ld files")
     parser.add_argument("--min_spd", type=float, default=60.0, help="Min speed km/h to count as 'moving'")
     parser.add_argument("--window", type=float, default=1.0, help="Sustained G window size in seconds")
+    parser.add_argument("--tire_map", default="tire_map.json", help="Path to optional local tire_map.json")
     args = parser.parse_args()
 
     dst = args.dir
@@ -114,6 +126,7 @@ def main():
         print(f"ERROR: Directory '{dst}' does not exist.")
         sys.exit(1)
 
+    tire_map = load_tire_map(args.tire_map)
     results = []
     skipped = []
 
@@ -122,27 +135,51 @@ def main():
             continue
         r, err = analyze_session(os.path.join(dst, f), args.min_spd, args.window)
         if r:
+            fname = r["file"]
+            tire = tire_map.get(fname, "")
+            if not tire:
+                # Try matching key substrings
+                for k, v in tire_map.items():
+                    if k in fname:
+                        tire = v
+                        break
+            r["tire"] = tire
             results.append(r)
         else:
             skipped.append((f, err))
 
     results.sort(key=lambda x: -x["sust_max"])
 
-    col_w = 58
+    has_tires = any(r.get("tire") for r in results)
+    col_w = 48 if has_tires else 58
+
     print()
-    print("=" * 105)
-    print(f"{'File':<{col_w}} {'RawMax':>8} {'SustMax':>8} {'P99':>7} {'BestSeg':>8} {'SegMean':>8}")
-    print("=" * 105)
+    print("=" * (112 if has_tires else 105))
+    if has_tires:
+        print(f"{'File':<{col_w}} {'Tire':<10} {'RawMax':>8} {'SustMax':>8} {'P99':>7} {'BestSeg':>8} {'SegMean':>8}")
+    else:
+        print(f"{'File':<{col_w}} {'RawMax':>8} {'SustMax':>8} {'P99':>7} {'BestSeg':>8} {'SegMean':>8}")
+    print("=" * (112 if has_tires else 105))
+
     for r in results:
         short = r["file"]
         if len(short) > col_w - 1:
             short = short[-(col_w - 1):]
-        print(
-            f"{short:<{col_w}} "
-            f"{r['raw_max']:>7.3f}G {r['sust_max']:>7.3f}G "
-            f"{r['p99']:>6.3f}G {r['best_seg_s']:>7.1f}s "
-            f"{r['best_seg_mean']:>7.3f}G"
-        )
+        if has_tires:
+            t_str = r.get("tire", "")
+            print(
+                f"{short:<{col_w}} {t_str:<10} "
+                f"{r['raw_max']:>7.3f}G {r['sust_max']:>7.3f}G "
+                f"{r['p99']:>6.3f}G {r['best_seg_s']:>7.1f}s "
+                f"{r['best_seg_mean']:>7.3f}G"
+            )
+        else:
+            print(
+                f"{short:<{col_w}} "
+                f"{r['raw_max']:>7.3f}G {r['sust_max']:>7.3f}G "
+                f"{r['p99']:>6.3f}G {r['best_seg_s']:>7.1f}s "
+                f"{r['best_seg_mean']:>7.3f}G"
+            )
 
     if skipped:
         print()
