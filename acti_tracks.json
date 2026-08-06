@@ -1,0 +1,11 @@
+{
+  "thunderhill_east_bypass": {
+    "name": "Thunderhill Raceway Park (East Bypass)",
+    "ref_lat": 39.540546,
+    "ref_lon": -122.331482,
+    "theta_deg": 180.018,
+    "dx_m": -49.94,
+    "dy_m": -0.838,
+    "rmse_error_m": 1.12
+  }
+}

@@ -77,7 +77,47 @@ Options:
   --driver DRIVER          Driver name metadata (auto-extracted from log if omitted)
   --vehicle_id VEHICLE_ID  Vehicle model metadata (auto-extracted from log if omitted)
   --venue_name VENUE_NAME  Track venue metadata (auto-extracted from log if omitted)
+---
+
+## Assetto Corsa ACTI GPS Alignment Tool (`align_acti_gps.py`)
+
+Aligns Assetto Corsa ACTI simulator telemetry logs with real-world WGS84 GPS coordinates across any track, correcting 3D track coordinate offsets and North orientation mismatch:
+
+```bash
+# Align single ACTI .ld log or entire directory (auto-detects track profile)
+python align_acti_gps.py /path/to/acti/logs --output_dir data/acti_aligned
+
+# Specify a track profile explicitly
+python align_acti_gps.py /path/to/acti/logs --track thunderhill_east_bypass
 ```
+
+### Auto-Calibration Mode (`--calibrate`)
+
+Automatically computes rotation angle and translation offsets for **any new Assetto Corsa track mod** by matching an ACTI simulator log against a real-world GPS log via ICP point-cloud optimization, saving the calibrated profile to [`acti_tracks.json`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/acti_tracks.json):
+
+```bash
+# Calibrate a new track profile (e.g. Laguna Seca or Sonoma)
+python align_acti_gps.py --calibrate real_world_session.ld acti_sim_session.ld --track_key laguna_seca --track_name "Laguna Seca"
+```
+
+Features:
+- **Modular Track Config Profiles (`acti_tracks.json`)**: Pre-configured profiles for `thunderhill_east_bypass`, `thunderhill_ccw`, `laguna_seca`, `sonoma_raceway`, etc.
+- **One-Command Auto Calibration**: Calculates `ref_lat`, `ref_lon`, `theta_deg`, `dx_m`, and `dy_m` with <1.2m trajectory precision via Powell/ICP optimization.
+- **In-Place Metadata Preservation**: Retains 100% of original ACTI header metadata (date, time, vehicle model, session type, tire comments).
+- **Exact Lap & Sector Markers**: Copies original ACTI `.ldx` lap times and sector markers without false 0:00 out laps.
+- **Dual GPS Channel Pairs**: Populates both `GPS Latitude/Longitude` and `Real GPS Latitude/Longitude` for universal MoTeC i2 workspace template compatibility.
+
+---
+
+## Tire Grip Analysis Tool (`analyze_tire_grip.py`)
+
+Compares lateral grip capabilities across exported MoTeC sessions:
+
+```bash
+python analyze_tire_grip.py --dir data/exported --min_spd 60
+```
+
+Supports an optional local `tire_map.json` file for personal tire compound tracking while keeping public repositories clean.
 
 ---
 
