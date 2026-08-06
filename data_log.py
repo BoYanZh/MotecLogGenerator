@@ -1223,30 +1223,44 @@ class DataLog(object):
                         populate_channel("GPS Heading", "deg", raw_hdg / 1000.0)
 
             # 6. Parse Accelerations (device 2, type 201)
-            if _ACCEL_LAT in namelist:
-                raw_ay = np.frombuffer(read_channel(_ACCEL_LAT), dtype="<i4")
-                if len(raw_ay) >= n_samples:
-                    populate_channel("CG Accel Lateral", "G", raw_ay / 10000.0)
+            # If a per-device timestamp file exists, resample onto GPS time grid using
+            # np.interp.  This corrects for slight rate drift (e.g. IMU at 25.008 Hz vs
+            # GPS at 25.000 Hz) which accumulates to 48-sample / 1.9 s error over a
+            # 1115 s session, causing a measurable lag in the exported data.
+            _IMU_TS_KEY  = "channel_2_201_0_1_1"
+            _GYRO_TS_KEY = "channel_3_202_0_1_1"
 
-            if _ACCEL_LONG in namelist:
-                raw_ax = np.frombuffer(read_channel(_ACCEL_LONG), dtype="<i4")
-                if len(raw_ax) >= n_samples:
-                    populate_channel("CG Accel Longitudinal", "G", raw_ax / 10000.0)
+            def _imu_times(ts_key):
+                """Return relative time array (seconds, vs stint_uptime_start) for a device ts file."""
+                if ts_key not in namelist:
+                    return None
+                raw = np.frombuffer(read_channel(ts_key), dtype="<i4")
+                return (raw[::2].astype(np.float64) - stint_uptime_start) / 1000.0
 
-            if _ACCEL_Z in namelist:
-                raw_az = np.frombuffer(read_channel(_ACCEL_Z), dtype="<i4")
-                if len(raw_az) >= n_samples:
-                    populate_channel("Lean Angle", "deg", raw_az / 10000.0)
+            def _parse_imu_channel(ch_key, out_name, units, scale, decimals=2, ts_key=_IMU_TS_KEY):
+                if ch_key not in namelist:
+                    return
+                raw = np.frombuffer(read_channel(ch_key), dtype="<i4").astype(np.float64) * scale
+                imu_t = _imu_times(ts_key)
+                if imu_t is not None and len(imu_t) == len(raw):
+                    # Resample via timestamps — handles rate drift and small offsets
+                    resampled = np.interp(times_sec, imu_t, raw)
+                    populate_channel(out_name, units, resampled, decimals)
+                elif len(raw) >= n_samples:
+                    # Fallback: naive truncation (off by ≤1 sample)
+                    populate_channel(out_name, units, raw, decimals)
+
+            _parse_imu_channel(_ACCEL_LAT,  "CG Accel Lateral",     "G",     1.0 / 10000.0)
+            _parse_imu_channel(_ACCEL_LONG, "CG Accel Longitudinal", "G",     1.0 / 10000.0)
+            _parse_imu_channel(_ACCEL_Z,    "Lean Angle",            "deg",   1.0 / 10000.0)
 
             # 7. Parse Gyroscope / Yaw Rate (device 3, type 202)
             if _GYRO_Z in namelist:
-                raw_gz = np.frombuffer(read_channel(_GYRO_Z), dtype="<i4")
-                if len(raw_gz) >= n_samples:
-                    populate_channel("Chassis Yaw Rate", "deg/s", (raw_gz / 1000.0) * -1.0)
+                _parse_imu_channel(_GYRO_Z, "Chassis Yaw Rate", "deg/s",
+                                   -1.0 / 1000.0, ts_key=_GYRO_TS_KEY)
             elif _GYRO_X in namelist:
-                raw_gx = np.frombuffer(read_channel(_GYRO_X), dtype="<i4")
-                if len(raw_gx) >= n_samples:
-                    populate_channel("x_rate_of_rotation", "", raw_gx / 1000.0)
+                _parse_imu_channel(_GYRO_X, "x_rate_of_rotation", "",
+                                   1.0 / 1000.0, ts_key=_GYRO_TS_KEY)
 
             # 8. Parse OBD-II / CAN Channels
             # RCZ stores binary channel values as contiguous IEEE 754 float64 (double precision) values.
