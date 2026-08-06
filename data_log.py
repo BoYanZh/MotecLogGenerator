@@ -60,6 +60,16 @@ class DataLog(object):
 
     def detect_native_frequency(self) -> float:
         """ Detects the primary native sampling frequency of the log data. """
+        # 1. Check device_update_rate channel if present
+        if "device_update_rate" in self.channels:
+            vals = [m.value for m in self.channels["device_update_rate"].messages if m.value > 0]
+            if vals:
+                rate = float(np.mean(vals))
+                for std_rate in [10.0, 20.0, 25.0, 50.0, 100.0]:
+                    if abs(rate - std_rate) / std_rate <= 0.10:
+                        return std_rate
+
+        # 2. Inspect key physical channels
         candidates = ["Ground Speed", "GPS Latitude", "Running Time", "CG Accel Lateral", "Engine RPM"]
         raw_freq = 0.0
         for name in candidates:
@@ -71,10 +81,13 @@ class DataLog(object):
             all_freqs = [c.avg_frequency() for c in self.channels.values() if len(c.messages) > 1]
             raw_freq = max(all_freqs) if all_freqs else 25.0
 
-        # Snap to standard logging rates if close (within 10%), otherwise round cleanly
-        for std_rate in [10.0, 20.0, 25.0, 50.0, 100.0, 200.0]:
+        # Snap to standard logging rates (up to 50Hz for auto-detection)
+        for std_rate in [10.0, 20.0, 25.0, 50.0]:
             if abs(raw_freq - std_rate) / std_rate <= 0.10:
                 return std_rate
+
+        if raw_freq > 50.0:
+            return 50.0
 
         return max(1.0, round(raw_freq, 1))
 
