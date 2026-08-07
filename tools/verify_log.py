@@ -24,7 +24,7 @@ def verify_motec_files(ld_path):
     print(f"==================================================")
 
     if not os.path.isfile(ld_path):
-        print(f"❌ ERROR: File not found: {ld_path}")
+        print(f"  ERROR: File not found: {ld_path}")
         return False
 
     ldx_path = os.path.splitext(ld_path)[0] + ".ldx"
@@ -36,21 +36,21 @@ def verify_motec_files(ld_path):
     # 1. Unpack Binary .ld File
     try:
         ld = ldData.fromfile(ld_path)
-        print("✓ Binary Header Unpacked Successfully.")
+        print("  Binary Header Unpacked Successfully.")
         print(f"  - Driver:      '{getattr(ld.head, 'driver', '')}'")
         print(f"  - Vehicle:     '{getattr(ld.head, 'vehicleid', '')}'")
         print(f"  - Venue:       '{getattr(ld.head, 'venue', '')}'")
         print(f"  - Datetime:    {getattr(ld.head, 'datetime', 'N/A')}")
         print(f"  - Channels:    {len(ld.channs)}")
     except Exception as e:
-        print(f"❌ CRITICAL ERROR unpacking binary .ld header: {e}")
+        print(f"  CRITICAL ERROR unpacking binary .ld header: {e}")
         return False
 
     # 2. Check Channel Value Bounds & NaN/Inf Anomalies
     if not ld.channs:
         errors.append("Log contains 0 channels.")
     else:
-        print(f"✓ Validated {len(ld.channs)} data channels.")
+        print(f"  Validated {len(ld.channs)} data channels.")
         for c in ld.channs:
             data = c.data
             if len(data) == 0:
@@ -72,13 +72,13 @@ def verify_motec_files(ld_path):
     missing_math = [m for m in expected_math if m not in ch_names]
 
     if not missing_math:
-        print("✓ All expected advanced math channels present (Tire Slip Angle FL, Understeer Index, G Force Combined).")
+        print("  All expected advanced math channels present (Tire Slip Angle FL, Understeer Index, G Force Combined).")
     else:
         warnings.append(f"Missing recommended math channels: {missing_math}")
 
     # 4. Parse XML Companion File (.ldx)
     if has_ldx:
-        print(f"✓ Found accompanying .ldx file: {os.path.basename(ldx_path)}")
+        print(f"  Found accompanying .ldx file: {os.path.basename(ldx_path)}")
         try:
             tree = ET.parse(ldx_path)
             root = tree.getroot()
@@ -118,15 +118,15 @@ def verify_motec_files(ld_path):
     print("\n--- Verification Summary ---")
     if warnings:
         for w in warnings:
-            print(f"⚠️  WARNING: {w}")
+            print(f"    WARNING: {w}")
 
     if errors:
         for err in errors:
-            print(f"❌ ERROR: {err}")
-        print("\nRESULT: FAILED ❌")
+            print(f"  ERROR: {err}")
+        print("\nRESULT: FAILED  ")
         return False
     else:
-        print("RESULT: PASSED ALL CHECKS ✅\n")
+        print("RESULT: PASSED ALL CHECKS  \n")
         return True
 
 if __name__ == "__main__":

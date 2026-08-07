@@ -43,9 +43,9 @@ if repo_root not in sys.path:
 from ldparser.ldparser import ldData
 from data_log import DataLog
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Corner segment presets (for human-readable corner naming on known tracks)
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 CORNER_PRESETS = {
     "thunderhill_east_bypass": [
         {"name": "Turn 1 (Fast Left)",        "start_m":  100, "end_m":  450},
@@ -62,9 +62,9 @@ CORNER_PRESETS = {
 }
 
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Dynamic Curvature-Based Corner Detection Algorithm
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 def auto_detect_corner_segments(lap, preset_key=None, min_radius_m=200.0, min_apex_dist_m=80.0):
     """
@@ -155,12 +155,12 @@ def auto_detect_corner_segments(lap, preset_key=None, min_radius_m=200.0, min_ap
     return segments
 
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Lap time parsing helpers
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 def parse_lap_time_str(s):
-    """'2:07.710' or '127.710' → seconds (float)."""
+    """'2:07.710' or '127.710'   seconds (float)."""
     if not s:
         return None
     try:
@@ -179,9 +179,9 @@ def fmt_lap_time(sec):
     return "%d:%06.3f" % (m, sec % 60)
 
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Beacon / lap boundary extraction
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 def _beacons_from_ldx(ldx_path):
     """Return sorted list of Start/Finish beacon timestamps (seconds)."""
@@ -229,9 +229,9 @@ def _select_lap_window(windows, target_sec=None, tol=2.0):
     return min(windows, key=lambda w: w[2])
 
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Core: load a single lap from any supported file format
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 def _spatial_slice(spd_kmh, brk, thr, lat, lng, freq,
                    t_start=None, t_end=None, lap_time=None, step_m=1.0):
@@ -305,7 +305,7 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
     lat = resample("CG Accel Lateral")
     lng = resample("CG Accel Longitudinal")
 
-    # ── Strategy 1: Lap Number channel ───────────────────────────────────────
+    # -- Strategy 1: Lap Number channel ---------------------------------------
     lap_t, lap_v = get("Lap Number")
     windows = []
     if lap_v is not None and len(lap_v) > 0:
@@ -322,7 +322,7 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
             if 60.0 <= dur <= 360.0:
                 windows.append((t_s_abs, t_e_abs, dur))
 
-    # ── Strategy 2: export temp .ld/.ldx, then parse ldx beacons ─────────────
+    # -- Strategy 2: export temp .ld/.ldx, then parse ldx beacons -------------
     if not windows:
         import tempfile
         try:
@@ -346,7 +346,7 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
             if verbose:
                 print("  Temp .ldx export failed: %s" % e)
 
-    # ── Strategy 3: speed-reset heuristic (distance drop) ────────────────────
+    # -- Strategy 3: speed-reset heuristic (distance drop) --------------------
     if not windows:
         dist_t, dist_v = get("Distance on GPS Speed")
         if dist_v is not None and len(dist_v) > 10:
@@ -373,7 +373,7 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
 
     t_s, t_e, dur = chosen
     if verbose:
-        print("  Selected lap: %s  (%.3fs)  [%.3f → %.3f]" % (fmt_lap_time(dur), dur, t_s, t_e))
+        print("  Selected lap: %s  (%.3fs)  [%.3f   %.3f]" % (fmt_lap_time(dur), dur, t_s, t_e))
 
     mask = (t_uniform >= t_s) & (t_uniform <= t_e)
     return _spatial_slice(
@@ -431,7 +431,7 @@ def _load_from_ld(ld_path, target_sec=None, tol=2.0, verbose=False):
         return None
     t_s, t_e, dur = chosen
     if verbose:
-        print("  Selected lap: %s  (%.3fs)  [%.3f → %.3f]" % (fmt_lap_time(dur), dur, t_s, t_e))
+        print("  Selected lap: %s  (%.3fs)  [%.3f   %.3f]" % (fmt_lap_time(dur), dur, t_s, t_e))
 
     result = _spatial_slice(spd, brk, thr, lat, lng, freq, t_start=t_s, t_end=t_e)
     result.update({"driver": driver, "vehicle": vehicle, "venue": venue,
@@ -532,9 +532,9 @@ def load_lap(file_path, target_sec=None, tol=2.0, verbose=False):
     return result
 
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Analysis & reporting
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 def _diag(time_loss, vmin_diff, ref_v_entry, tgt_v_entry, ref_v_exit, tgt_v_exit,
           ref_brk_max, tgt_brk_max):
@@ -573,7 +573,7 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
     print("  CORNER-BY-CORNER TIME LOSS & DELTA ANALYSIS")
     print("  Reference  : %-40s  %s" % (ref["file"], fmt_lap_time(ref["lap_time_sec"])))
     print("  Target     : %-40s  %s" % (tgt["file"], fmt_lap_time(tgt["lap_time_sec"])))
-    print("  Total Δt   : %+.3fs  (%s)"
+    print("  Total  t   : %+.3fs  (%s)"
           % (total_delta, "SLOWER" if total_delta > 0 else "FASTER"))
     print("=" * W)
 
@@ -597,8 +597,8 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
     print()
     print("  CORNER-BY-CORNER BREAKDOWN (Auto-Detected Segments)")
     hdr = "  %-22s | %8s | %7s %7s %7s | %7s %7s | %7s %7s | %-28s"
-    print(hdr % ("Corner", "Δt (s)",
-                 "Vmin R", "Vmin T", "ΔVmin",
+    print(hdr % ("Corner", " t (s)",
+                 "Vmin R", "Vmin T", " Vmin",
                  "Brk R", "Brk T",
                  "WOT R%", "WOT T%",
                  "Primary Cause"))
@@ -629,7 +629,7 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
                      r_brk_max, t_brk_max)
 
         tl_str = "%+.3f" % tl
-        flag = " ◄" if tl > 0.3 else ""
+        flag = "  " if tl > 0.3 else ""
         print("  %-22s | %8s | %7.1f %7.1f %+7.1f | %7.0f %7.0f | %7.1f %7.1f | %-28s%s"
               % (c["name"][:22], tl_str,
                  r_vmin, t_vmin, t_vmin - r_vmin,
@@ -658,10 +658,10 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
         for i, p in enumerate(priority_list, 1):
             coaching = _coaching_tip(p)
             print("  %d. %-22s  %+.3fs   %s" % (i, p["name"], p["time_loss"], p["diag"]))
-            print("     Apex speed: %.1f → %.1f km/h (%+.1f)   Peak brake: %.0f → %.0f kPa   WOT: %+.1f%%"
+            print("     Apex speed: %.1f   %.1f km/h (%+.1f)   Peak brake: %.0f   %.0f kPa   WOT: %+.1f%%"
                   % (p["r_vmin"], p["t_vmin"], p["vmin_diff"],
                      p["r_brk"], p["t_brk"], p["wot_diff"]))
-            print("     → %s" % coaching)
+            print("       %s" % coaching)
             print()
 
     print("=" * W + "\n")
@@ -678,14 +678,14 @@ def _coaching_tip(p):
     if "Insufficient Braking" in diag:
         return ("Brake later and harder into this corner. "
                 "Ref brakes %.0f kPa; you used %.0f kPa. "
-                "Trust the car — commit to a later, sharper brake point."
+                "Trust the car - commit to a later, sharper brake point."
                 % (p["r_brk"], p["t_brk"]))
     if "Low Apex" in diag:
         return ("Over-braking reduces apex speed. "
                 "Try releasing the brake sooner (trail braking) "
                 "to carry %.1f more km/h through the apex." % abs(dv))
     if "Early Braking" in diag:
-        return ("Move brake point %.1f–2 car-lengths later. "
+        return ("Move brake point %.1f-2 car-lengths later. "
                 "You're bleeding speed before it's needed." % abs(dv / 10))
     if "Late / Hesitant Throttle" in diag:
         return ("Pick up throttle earlier on exit. "
@@ -695,9 +695,9 @@ def _coaching_tip(p):
             "for a detailed braking / throttle trace comparison.")
 
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Entry point
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(
@@ -717,7 +717,7 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
-    # ── Batch directory mode ─────────────────────────────────────────────────
+    # -- Batch directory mode -------------------------------------------------
     if args.dir:
         files = sorted([
             os.path.join(args.dir, f)
@@ -740,7 +740,7 @@ def main():
             analyze_and_report(ref, tgt, corners, verbose=args.verbose)
         sys.exit(0)
 
-    # ── Two-file mode ────────────────────────────────────────────────────────
+    # -- Two-file mode --------------------------------------------------------
     if not args.ref_file or not args.target_file:
         parser.print_help()
         sys.exit(1)

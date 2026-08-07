@@ -232,7 +232,7 @@ def test_interp_zoh_discrete():
 
 
 # ---------------------------------------------------------------------------
-# CRC check — resample does not alter discrete values
+# CRC check - resample does not alter discrete values
 # ---------------------------------------------------------------------------
 def test_gear_preserved_after_resample():
     log = DataLog()

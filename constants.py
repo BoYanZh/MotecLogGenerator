@@ -6,9 +6,9 @@ Provides a Single Source of Truth for:
   - Multi-source channel alias mappings (RaceChrono, AiM Solo, PB Buddy, VBOX, Cobb, Generic CSVs).
 """
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Canonical MoTeC Channel Names (Single Source of Truth)
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 CH_GROUND_SPEED     = "Ground Speed"
 CH_CG_ACCEL_LAT     = "CG Accel Lateral"
 CH_CG_ACCEL_LON     = "CG Accel Longitudinal"
@@ -34,9 +34,9 @@ CH_SLIP_ANGLE_RR    = "Tire Slip Angle RR"
 CH_UNDERSTEER_INDEX = "Understeer Index"
 CH_G_COMBINED       = "G Force Combined"
 
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 # Channel Alias Mappings: Raw header string -> (canonical_name, unit, dec)
-# ────────────────────────────────────────────────────────────────────────────
+# ----------------------------------------------------------------------------
 CHANNEL_ALIASES = {
     # Speed
     "Ground Speed":           (CH_GROUND_SPEED, "km/h", 2),
@@ -61,6 +61,7 @@ CHANNEL_ALIASES = {
     "CG Accel Lateral":       (CH_CG_ACCEL_LAT, "G", 4),
     "GPS_LatAcc":             (CH_CG_ACCEL_LAT, "G", 4),
     "LateralAcc":             (CH_CG_ACCEL_LAT, "G", 4),
+    "lateral_acc":            (CH_CG_ACCEL_LAT, "G", 4),
     "latacc":                 (CH_CG_ACCEL_LAT, "G", 4),
     "latacc-calc":            (CH_CG_ACCEL_LAT, "G", 4),
     "lat accel g":            (CH_CG_ACCEL_LAT, "G", 4),
@@ -68,6 +69,7 @@ CHANNEL_ALIASES = {
     "GPS_LongAcc":            (CH_CG_ACCEL_LON, "G", 4),
     "LineAcc":                (CH_CG_ACCEL_LON, "G", 4),
     "LongAcc":                (CH_CG_ACCEL_LON, "G", 4),
+    "longitudinal_acc":       (CH_CG_ACCEL_LON, "G", 4),
     "longacc":                (CH_CG_ACCEL_LON, "G", 4),
     "longacc-calc":           (CH_CG_ACCEL_LON, "G", 4),
     "long accel g":           (CH_CG_ACCEL_LON, "G", 4),
@@ -88,27 +90,34 @@ CHANNEL_ALIASES = {
     "Lap Number":             (CH_LAP_NUMBER, "", 0),
     "Lap":                    (CH_LAP_NUMBER, "", 0),
     "Lap Count":              (CH_LAP_NUMBER, "", 0),
+    "lap_number":             (CH_LAP_NUMBER, "", 0),
 
     # Driver Inputs & ECU
     "Throttle Pos":           (CH_THROTTLE_POS, "%", 2),
     "Throttle Position":      (CH_THROTTLE_POS, "%", 2),
     "PPS":                    (CH_THROTTLE_POS, "%", 2),
+    "accelerator_pos":        (CH_THROTTLE_POS, "%", 2),
     "accelerator_pos-canbus": (CH_THROTTLE_POS, "%", 2),
     "Brake Press":            (CH_BRAKE_PRESS, "kPa", 2),
     "Brake Pressure":         (CH_BRAKE_PRESS, "kPa", 2),
     "BrakePress":             (CH_BRAKE_PRESS, "bar", 2),
+    "brake_pressure":         (CH_BRAKE_PRESS, "kPa", 2),
     "brake_pressure-canbus":  (CH_BRAKE_PRESS, "kPa", 2),
     "Brake Pos":              (CH_BRAKE_POS, "%", 2),
+    "brake_pos":              (CH_BRAKE_POS, "%", 2),
     "brake_pos-canbus":       (CH_BRAKE_POS, "%", 2),
     "Engine RPM":             (CH_ENGINE_RPM, "rpm", 2),
     "RPM":                    (CH_ENGINE_RPM, "rpm", 2),
     "rpm-canbus":             (CH_ENGINE_RPM, "rpm", 2),
     "Steering Angle":         (CH_STEERING_ANGLE, "deg", 2),
     "SteerAngle":             (CH_STEERING_ANGLE, "deg", 2),
+    "steering_angle":         (CH_STEERING_ANGLE, "deg", 2),
     "steering_angle-canbus":  (CH_STEERING_ANGLE, "deg", 2),
     "Coolant Temp":           (CH_COOLANT_TEMP, "C", 2),
+    "coolant_temp":           (CH_COOLANT_TEMP, "C", 2),
     "coolant_temp-canbus":    (CH_COOLANT_TEMP, "C", 2),
     "Engine Oil Temp":        (CH_ENGINE_OIL_TEMP, "C", 2),
+    "engine_oil_temp":        (CH_ENGINE_OIL_TEMP, "C", 2),
     "engine_oil_temp-canbus": (CH_ENGINE_OIL_TEMP, "C", 2),
     "Gear":                   (CH_GEAR, "", 0),
 }

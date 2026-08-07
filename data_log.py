@@ -1260,7 +1260,7 @@ class DataLog(object):
             "GPS Speed": ("Ground Speed", "km/h", 5),  # Convert m/s -> km/h
             "GPS Heading": ("GPS Heading", "deg", 3),
             "GPS Altitude": ("GPS Altitude", "m", 3),
-            # Lap count column — added by PB Buddy on request (Timur, 2026-08)
+            # Lap count column - added by PB Buddy on request (Timur, 2026-08)
             "Lap Count": ("Lap Number", "", 0),
             "Lap": ("Lap Number", "", 0),
             "Lap Number": ("Lap Number", "", 0),
@@ -1632,11 +1632,11 @@ class DataLog(object):
                 raw = np.frombuffer(read_channel(ch_key), dtype="<i4").astype(np.float64) * scale
                 imu_t = _imu_times(ts_key)
                 if imu_t is not None and len(imu_t) == len(raw):
-                    # Resample via timestamps — handles rate drift and small offsets
+                    # Resample via timestamps - handles rate drift and small offsets
                     resampled = np.interp(times_sec, imu_t, raw)
                     populate_channel(out_name, units, resampled, decimals)
                 elif len(raw) >= n_samples:
-                    # Fallback: naive truncation (off by ≤1 sample)
+                    # Fallback: naive truncation (off by  1 sample)
                     populate_channel(out_name, units, raw, decimals)
 
             _parse_imu_channel(_ACCEL_LAT,  "CG Accel Lateral",     "G",     -1.0 / 10000.0)
@@ -1713,16 +1713,16 @@ class DataLog(object):
                 else:
                     populate_channel(f"OBD_{pid}", "", values)
 
-            # 8b. Parse OBD-II / CAN Channels — Device 4, Type 101 (shared timestamp format)
+            # 8b. Parse OBD-II / CAN Channels - Device 4, Type 101 (shared timestamp format)
             # Format: channel_4_101_0_1_1 = shared i32[::2] uptime timestamps for all PIDs
             #         channel2_4_101_0_{pid}_3 = per-PID float64 values (same length as timestamps)
-            # Device 4/type 101 uses phone-IMU channels for PIDs 7/8/49/50 — different from
+            # Device 4/type 101 uses phone-IMU channels for PIDs 7/8/49/50 - different from
             # the GR86-ECU meaning of the same PIDs on device 12/type 100.
             _G = 9.80665
             rcz_dev4_pid_overrides = {
                 # PID 7 on device 4 = phone lateral accelerometer (m/s^2), NOT ECU Roll Angle
                 "7":  ("CG Accel Lateral",     "G",    1.0 / _G, 0.0),
-                # PID 8 on device 4 = phone vertical accelerometer (m/s^2, includes gravity) — skip
+                # PID 8 on device 4 = phone vertical accelerometer (m/s^2, includes gravity) - skip
                 "8":  None,
             }
             dev4_ts_key = _OBD_DEV4_TS_KEY

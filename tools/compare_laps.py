@@ -207,13 +207,13 @@ def main():
     if not args.fastest_only:
         print("\n--- DETAILED SESSION BREAKDOWN ---")
         for s in valid_sessions:
-            print(f"\n📄 Session: {s['file']}")
+            print(f"\n  Session: {s['file']}")
             print(f"   Driver: {s['driver']} | Vehicle: {s['vehicle']} | Venue: {s['venue']} | Date: {s['datetime']}")
             print(f"   Total Laps: {s['total_laps']} | Fastest Lap: {format_lap_time(s['fastest_sec'])}")
             if s["laps"]:
                 print("   Laps Detail:")
                 for l in s["laps"]:
-                    is_fastest = " ⭐ (FASTEST)" if s["fastest_sec"] and abs(l["duration_sec"] - s["fastest_sec"]) < 0.001 else ""
+                    is_fastest = "   (FASTEST)" if s["fastest_sec"] and abs(l["duration_sec"] - s["fastest_sec"]) < 0.001 else ""
                     splits_fmt = " | ".join([f"S{i+1}: {format_lap_time(sp)}" for i, sp in enumerate(l["splits"])])
                     splits_str = f" [{splits_fmt}]" if l["splits"] else ""
                     print(f"     - Lap {l['lap_num']:<2}: {format_lap_time(l['duration_sec'])}{splits_str}{is_fastest}")
