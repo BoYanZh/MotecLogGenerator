@@ -376,6 +376,11 @@ class DataLog(object):
         h_unwrapped = np.unwrap(np.radians(headings))
         h_deg = np.degrees(h_unwrapped)
         yaw_rate_val = -np.gradient(h_deg, times)
+        freq = gps_h_chan.avg_frequency()
+        w = max(1, int(0.2 * freq))
+        if len(yaw_rate_val) >= w and w > 1:
+            padded = np.pad(yaw_rate_val, (w // 2, w - 1 - w // 2), mode="edge")
+            yaw_rate_val = np.mean(np.lib.stride_tricks.sliding_window_view(padded, w), axis=1)[:len(yaw_rate_val)]
         spd_chan = self.channels.get("Ground Speed")
         if spd_chan and len(spd_chan.messages) == len(times):
             v_vals = np.array([m.value for m in spd_chan.messages])
