@@ -177,11 +177,11 @@ def _process_one(args, stint_override=None, output_override=None):
     for channel_name, channel in data_log.channels.items():
         print("\t%s" % channel)
 
-    resample_freq = data_log.resample(args.frequency)
-    print("Resampled channels at %.1f Hz..." % resample_freq)
-
     print("Calculating advanced math channels...")
     data_log.calculate_math_channels()
+
+    resample_freq = data_log.resample(args.frequency)
+    print("Resampled channels at %.1f Hz..." % resample_freq)
 
     print("Converting to MoTeC log...")
 

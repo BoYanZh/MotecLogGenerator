@@ -376,6 +376,7 @@ class DataLog(object):
         h_unwrapped = np.unwrap(np.radians(headings))
         h_deg = np.degrees(h_unwrapped)
         yaw_rate_val = -np.gradient(h_deg, times)
+        yaw_rate_val = np.clip(yaw_rate_val, -300.0, 300.0)
         self.add_channel("Chassis Yaw Rate", "deg/s", float, 2)
         self.channels["Chassis Yaw Rate"].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
 
