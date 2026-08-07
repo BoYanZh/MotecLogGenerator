@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import math
 
 import numpy as np
@@ -1075,15 +1076,16 @@ class DataLog(object):
 
         # 2. Process all lines BEFORE Data Header Line as Key-Value Metadata
         for line in log_lines[:data_header_idx]:
-            line_clean = line.strip().strip('"').strip("'")
-            if not line_clean:
+            line_s = line.strip()
+            if not line_s:
                 continue
             try:
-                parts = [p.strip().strip('"').strip("'") for p in next(csv.reader([line_clean]))]
+                parts = [p.strip().strip('"').strip("'") for p in next(csv.reader([line_s]))]
             except Exception:
-                parts = [p.strip().strip('"').strip("'") for p in line_clean.split(",")]
+                parts = [p.strip().strip('"').strip("'") for p in line_s.split(",")]
             if len(parts) == 2:
                 key, val = parts[0], parts[1]
+                self.metadata[key] = val
                 if key == "Track name":
                     self.metadata["venue_name"] = val
                 elif key == "Date":
@@ -1093,13 +1095,32 @@ class DataLog(object):
                 elif key == "Session name":
                     self.metadata["session"] = val
 
-        # Extract datetime if date/time present
-        if "date" in self.metadata and "time" in self.metadata:
+        # Extract datetime from PB Buddy epoch + timezone offset or Date/Time fields
+        dt = None
+        if "Session start, seconds since epoch" in self.metadata:
             try:
-                dt_str = f"{self.metadata['date']} {self.metadata['time']}"
-                self.datetime = datetime.datetime.strptime(dt_str, "%m/%d/%y %H:%M:%S")
+                epoch = float(self.metadata["Session start, seconds since epoch"])
+                offset_sec = 0.0
+                if "Timezone offset, milliseconds" in self.metadata:
+                    offset_sec = float(self.metadata["Timezone offset, milliseconds"]) / 1000.0
+                dt = datetime.datetime.fromtimestamp(epoch + offset_sec, tz=datetime.timezone.utc).replace(tzinfo=None)
             except Exception:
                 pass
+
+        if dt is None:
+            date_str = self.metadata.get("date") or self.metadata.get("Date") or self.metadata.get("Session start date, local timezone, YYYYMMDD")
+            time_str = self.metadata.get("time") or self.metadata.get("Time")
+            if date_str and time_str:
+                dt_str = f"{date_str} {time_str}".strip()
+                for fmt in ("%m/%d/%Y %H:%M:%S", "%m/%d/%y %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        dt = datetime.datetime.strptime(dt_str, fmt)
+                        break
+                    except Exception:
+                        pass
+
+        if dt:
+            self.datetime = dt
 
         # 3. Read Headers and Units Row
         header_line = log_lines[data_header_idx].strip()
