@@ -63,6 +63,7 @@ def _normalize_venue(name):
             canonical = VENUE_NORMALIZE[key]
             idx = lower_search.index(key) + len(key)
             raw_suffix = clean_name.replace("_", " ").replace("-", " ")[idx:].strip()
+            raw_suffix = raw_suffix.replace("(", " ").replace(")", " ").strip()
 
             # Truncate at common filename separators
             raw_suffix = re.split(r"\s+-\s+|\s+_\s+|\s+\d{4}\b", raw_suffix)[0].strip()
@@ -85,6 +86,8 @@ def _normalize_venue(name):
             suffix = " ".join(suffix.split())
             if suffix:
                 formatted_suffix = suffix.title() if (suffix.islower() or suffix.isupper()) and len(suffix) > 3 else suffix
+                formatted_suffix = re.sub(r"\bCcw\b", "CCW", formatted_suffix)
+                formatted_suffix = re.sub(r"\bCw\b", "CW", formatted_suffix)
                 return f"{canonical} ({formatted_suffix})"
             return canonical
     return name
