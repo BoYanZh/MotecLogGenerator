@@ -1556,7 +1556,7 @@ class DataLog(object):
                     # Fallback: naive truncation (off by ≤1 sample)
                     populate_channel(out_name, units, raw, decimals)
 
-            _parse_imu_channel(_ACCEL_LAT,  "CG Accel Lateral",     "G",     1.0 / 10000.0)
+            _parse_imu_channel(_ACCEL_LAT,  "CG Accel Lateral",     "G",     -1.0 / 10000.0)
             _parse_imu_channel(_ACCEL_LONG, "CG Accel Longitudinal", "G",     1.0 / 10000.0)
             _parse_imu_channel(_ACCEL_Z,    "Lean Angle",            "deg",   1.0 / 10000.0)
 
