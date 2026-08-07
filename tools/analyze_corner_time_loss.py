@@ -6,6 +6,11 @@ Compares two laps (from .rcz, .ld, or .csv files) on a spatial distance axis,
 computing corner-by-corner time delta, apex speed, braking intensity, and
 throttle application differences with priority-ranked coaching output.
 
+Automatic Corner Detection (--track auto):
+  Uses dynamic spatial trajectory curvature kappa(s) = |a_y| / v^2 to detect
+  all physical corner apexes, entry/exit boundaries, and radius R_min dynamically
+  without requiring hardcoded distance presets for any new track.
+
 Lap selection:
   - By default, the FASTEST lap from each session is used.
   - Use --ref_lap / --target_lap to specify a particular lap time (MM:SS.mmm).
@@ -13,7 +18,7 @@ Lap selection:
 Supported input formats: .rcz  .ld  .csv (RaceChrono CSV export)
 
 Usage:
-    # Auto best laps:
+    # Auto best laps & dynamic corner detection:
     python tools/analyze_corner_time_loss.py ref.rcz target.rcz
 
     # Specific laps by time:
@@ -39,7 +44,7 @@ from ldparser.ldparser import ldData
 from data_log import DataLog
 
 # ────────────────────────────────────────────────────────────────────────────
-# Corner segment definitions (distance from start/finish in metres)
+# Corner segment presets (for human-readable corner naming on known tracks)
 # ────────────────────────────────────────────────────────────────────────────
 CORNER_PRESETS = {
     "thunderhill_east_bypass": [
@@ -55,7 +60,99 @@ CORNER_PRESETS = {
         {"name": "Front Straight (Full WOT)", "start_m": 4200, "end_m": 4540},
     ],
 }
-DEFAULT_PRESET = "thunderhill_east_bypass"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Dynamic Curvature-Based Corner Detection Algorithm
+# ────────────────────────────────────────────────────────────────────────────
+
+def auto_detect_corner_segments(lap, preset_key=None, min_radius_m=200.0, min_apex_dist_m=80.0):
+    """
+    Dynamically detects corner segments from spatial trajectory curvature kappa(s) = |a_y| / v^2.
+    Finds physical apexes, entry/exit boundaries, and merges overlapping complexes.
+    If preset_key matches a known track, labels segments with preset corner names.
+    """
+    s = lap["s"]
+    v = lap["v"] / 3.6  # m/s
+    lat_g = lap["lat"]
+
+    v_safe = np.maximum(v, 3.0)
+    kappa = np.abs(lat_g * 9.80665) / (v_safe ** 2)
+
+    # 15m moving average smoothing for curvature
+    w = 15
+    padded = np.pad(kappa, (w // 2, w - 1 - w // 2), mode="edge")
+    kappa_smooth = np.mean(np.lib.stride_tricks.sliding_window_view(padded, w), axis=1)
+
+    thresh = 1.0 / min_radius_m
+    raw_peaks = []
+    for i in range(1, len(s) - 1):
+        if kappa_smooth[i] >= thresh:
+            if kappa_smooth[i] >= kappa_smooth[i - 1] and kappa_smooth[i] >= kappa_smooth[i + 1]:
+                r = 1.0 / max(1e-5, kappa_smooth[i])
+                raw_peaks.append({
+                    "s": s[i], "idx": i, "r_m": r,
+                    "lat_g": lat_g[i], "v_kmh": lap["v"][i]
+                })
+
+    if not raw_peaks:
+        # Fallback if track is purely straight or data lacks lat_g
+        return CORNER_PRESETS.get(preset_key, [])
+
+    # Cluster peaks closer than min_apex_dist_m
+    merged_clusters = []
+    for p in raw_peaks:
+        if not merged_clusters or (p["s"] - merged_clusters[-1][-1]["s"]) > min_apex_dist_m:
+            merged_clusters.append([p])
+        else:
+            merged_clusters[-1].append(p)
+
+    known_corners = CORNER_PRESETS.get(preset_key, [])
+    segments = []
+
+    for idx, cluster in enumerate(merged_clusters, 1):
+        apex_s_min = cluster[0]["s"]
+        apex_s_max = cluster[-1]["s"]
+        min_r = min(p["r_m"] for p in cluster)
+        main_dir = "R" if np.mean([p["lat_g"] for p in cluster]) > 0 else "L"
+
+        # Expand entry/exit boundaries (where kappa < 0.0015)
+        e_idx = cluster[0]["idx"]
+        while e_idx > 0 and kappa_smooth[e_idx] > 0.0015:
+            e_idx -= 1
+
+        x_idx = cluster[-1]["idx"]
+        while x_idx < len(s) - 1 and kappa_smooth[x_idx] > 0.0015:
+            x_idx += 1
+
+        s_entry = s[e_idx]
+        s_exit  = s[x_idx]
+
+        if segments and s_entry < segments[-1]["end_m"]:
+            mid = (segments[-1]["end_m"] + s_entry) / 2.0
+            segments[-1]["end_m"] = mid
+            s_entry = mid
+
+        apex_mid = (apex_s_min + apex_s_max) / 2.0
+
+        # Try matching with known preset name by spatial overlap
+        matched_name = None
+        for kc in known_corners:
+            if kc["start_m"] <= apex_mid <= kc["end_m"] or abs(apex_mid - (kc["start_m"] + kc["end_m"])/2.0) < 150:
+                matched_name = kc["name"]
+                break
+
+        name = matched_name if matched_name else f"Turn {idx} ({main_dir}, R={min_r:.0f}m)"
+
+        segments.append({
+            "name": name,
+            "start_m": s_entry,
+            "end_m": s_exit,
+            "apex_m": apex_mid,
+            "min_r": min_r
+        })
+
+    return segments
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -136,61 +233,44 @@ def _select_lap_window(windows, target_sec=None, tol=2.0):
 # Core: load a single lap from any supported file format
 # ────────────────────────────────────────────────────────────────────────────
 
-_CHANNELS = ["Ground Speed", "CG Accel Lateral", "CG Accel Longitudinal",
-             "Throttle Pos", "Brake Press"]
-
-
-def _spatial_slice(spd_kmh, brk, thr, lat, lng, freq, t_start=None, t_end=None, step_m=1.0):
-    """
-    Convert a time-domain speed trace (+ optional channel arrays) to a 1 m spatial grid.
-    If t_start/t_end are given, slice that window first.
-    Returns dict with s_grid, v_kmh, t_grid, brk, thr, lat, lng, total_dist_m, lap_time_sec.
-    """
+def _spatial_slice(spd_kmh, brk, thr, lat, lng, freq,
+                   t_start=None, t_end=None, lap_time=None, step_m=1.0):
     dt = 1.0 / freq
     n = len(spd_kmh)
-    t_arr = np.arange(n) * dt
 
     if t_start is not None and t_end is not None:
+        t_arr = np.arange(n) * dt
         mask = (t_arr >= t_start) & (t_arr <= t_end)
         spd_kmh = spd_kmh[mask]
-        brk     = brk[mask]     if brk is not None else None
-        thr     = thr[mask]     if thr is not None else None
-        lat     = lat[mask]     if lat is not None else None
-        lng     = lng[mask]     if lng is not None else None
+        brk     = brk[mask]  if brk is not None else None
+        thr     = thr[mask]  if thr is not None else None
+        lat     = lat[mask]  if lat is not None else None
+        lng     = lng[mask]  if lng is not None else None
         lap_time = t_end - t_start
-    else:
-        lap_time = n * dt
+
+    if lap_time is None:
+        lap_time = len(spd_kmh) * dt
 
     spd_ms = np.maximum(spd_kmh / 3.6, 0.5)
-    dist = np.cumsum(spd_ms * dt)
-    total_dist = dist[-1]
-
-    s = np.arange(0.0, total_dist, step_m)
+    dist   = np.cumsum(spd_ms * dt)
+    total  = dist[-1]
+    s      = np.arange(0.0, total, step_m)
 
     def interp_or_zeros(arr):
-        if arr is None:
-            return np.zeros(len(s))
-        return np.interp(s, dist, arr)
-
-    v_s   = np.interp(s, dist, spd_kmh)
-    t_s   = np.cumsum(step_m / np.maximum(np.interp(s, dist, spd_ms), 0.5))
-    brk_s = interp_or_zeros(brk)
-    thr_s = interp_or_zeros(thr)
-    lat_s = interp_or_zeros(lat)
-    lng_s = interp_or_zeros(lng)
+        return np.interp(s, dist, arr) if arr is not None else np.zeros(len(s))
 
     return {
-        "s": s, "v": v_s, "t": t_s,
-        "brk": brk_s, "thr": thr_s, "lat": lat_s, "lng": lng_s,
-        "total_dist_m": total_dist,
-        "lap_time_sec": lap_time,
+        "s": s, "v": np.interp(s, dist, spd_kmh),
+        "t": np.cumsum(step_m / np.maximum(np.interp(s, dist, spd_ms), 0.5)),
+        "brk": interp_or_zeros(brk), "thr": interp_or_zeros(thr),
+        "lat": interp_or_zeros(lat), "lng": interp_or_zeros(lng),
+        "total_dist_m": total, "lap_time_sec": lap_time,
     }
 
 
 def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
     """
     Extract lap spatial data from a DataLog object (already loaded + math channels computed).
-    Writes a temporary .ld/.ldx to disk so we can use beacon-based lap detection.
     """
     def get(name):
         ch = dl.channels.get(name)
@@ -207,7 +287,6 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
     if spd_v is None or len(spd_v) < 50:
         return None
 
-    # Build uniform time grid
     dt_arr = np.diff(spd_t)
     dt_arr = dt_arr[dt_arr > 0]
     freq = 1.0 / np.median(dt_arr) if len(dt_arr) else 20.0
@@ -259,7 +338,6 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
                 ml.write_ldx(tmp_ldx, getattr(dl, "laps_info", None), beacons=beacons_raw)
                 ldx_beacons = _beacons_from_ldx(tmp_ldx)
                 windows = _find_lap_windows(ldx_beacons)
-                # ldx beacons are session-relative (start from 0); t_uniform is absolute.
                 t_offset = t_uniform[0]
                 windows = [(t_offset + w[0], t_offset + w[1], w[2]) for w in windows]
                 if verbose:
@@ -268,15 +346,13 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
             if verbose:
                 print("  Temp .ldx export failed: %s" % e)
 
-
-
     # ── Strategy 3: speed-reset heuristic (distance drop) ────────────────────
     if not windows:
         dist_t, dist_v = get("Distance on GPS Speed")
         if dist_v is not None and len(dist_v) > 10:
             dist_uniform = np.interp(t_uniform, dist_t, dist_v)
             ddist = np.diff(dist_uniform)
-            reset_idx = np.where(ddist < -50)[0]  # distance reset = new lap
+            reset_idx = np.where(ddist < -50)[0]
             lap_starts = np.concatenate([[0], reset_idx + 1])
             lap_ends   = np.concatenate([reset_idx, [len(t_uniform) - 1]])
             for s_i, e_i in zip(lap_starts, lap_ends):
@@ -284,7 +360,6 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
                 if 60.0 <= dur <= 360.0:
                     windows.append((t_uniform[s_i], t_uniform[e_i], dur))
 
-    # ── Fallback: whole trace as single lap ───────────────────────────────────
     if not windows:
         lap_time = t_uniform[-1] - t_uniform[0]
         if verbose:
@@ -309,8 +384,6 @@ def _load_from_data_log(dl, target_sec=None, tol=2.0, verbose=False):
         lng[mask] if lng is not None else None,
         freq, lap_time=dur,
     )
-
-
 
 
 def _load_from_ld(ld_path, target_sec=None, tol=2.0, verbose=False):
@@ -341,7 +414,6 @@ def _load_from_ld(ld_path, target_sec=None, tol=2.0, verbose=False):
     vehicle = getattr(ld.head, "vehicleid", "") or ""
     venue   = getattr(ld.head, "venue",     "") or ""
 
-    # Parse .ldx beacons
     ldx_path = os.path.splitext(ld_path)[0] + ".ldx"
     beacons  = _beacons_from_ldx(ldx_path)
     windows  = _find_lap_windows(beacons)
@@ -367,42 +439,6 @@ def _load_from_ld(ld_path, target_sec=None, tol=2.0, verbose=False):
     return result
 
 
-# monkey-patch lap_time into _spatial_slice when called without t_start/t_end
-def _spatial_slice(spd_kmh, brk, thr, lat, lng, freq,
-                   t_start=None, t_end=None, lap_time=None, step_m=1.0):
-    dt = 1.0 / freq
-    n = len(spd_kmh)
-
-    if t_start is not None and t_end is not None:
-        t_arr = np.arange(n) * dt
-        mask = (t_arr >= t_start) & (t_arr <= t_end)
-        spd_kmh = spd_kmh[mask]
-        brk     = brk[mask]  if brk is not None else None
-        thr     = thr[mask]  if thr is not None else None
-        lat     = lat[mask]  if lat is not None else None
-        lng     = lng[mask]  if lng is not None else None
-        lap_time = t_end - t_start
-
-    if lap_time is None:
-        lap_time = len(spd_kmh) * dt
-
-    spd_ms = np.maximum(spd_kmh / 3.6, 0.5)
-    dist   = np.cumsum(spd_ms * dt)
-    total  = dist[-1]
-    s      = np.arange(0.0, total, step_m)
-
-    def interp_or_zeros(arr):
-        return np.interp(s, dist, arr) if arr is not None else np.zeros(len(s))
-
-    return {
-        "s": s, "v": np.interp(s, dist, spd_kmh),
-        "t": np.cumsum(step_m / np.maximum(np.interp(s, dist, spd_ms), 0.5)),
-        "brk": interp_or_zeros(brk), "thr": interp_or_zeros(thr),
-        "lat": interp_or_zeros(lat), "lng": interp_or_zeros(lng),
-        "total_dist_m": total, "lap_time_sec": lap_time,
-    }
-
-
 def load_lap(file_path, target_sec=None, tol=2.0, verbose=False):
     """
     Universal loader. Accepts .rcz, .ld, or .csv.
@@ -414,20 +450,17 @@ def load_lap(file_path, target_sec=None, tol=2.0, verbose=False):
         print("Loading: %s  (target lap: %s)" % (label,
               fmt_lap_time(target_sec) if target_sec else "fastest"))
 
-    # ── .ld ──────────────────────────────────────────────────────────────────
     if ext == ".ld":
         result = _load_from_ld(file_path, target_sec, tol, verbose)
         if result:
             result.setdefault("file", label)
         return result
 
-    # ── .rcz or .csv → load via DataLog ──────────────────────────────────────
     dl = DataLog()
 
     if ext == ".rcz":
-        # For multi-stint RCZ files, scan all stints for the target lap
-        import zipfile, json
-        stints = [None]  # None = default (stint 0)
+        import zipfile
+        stints = [None]
         try:
             with zipfile.ZipFile(file_path, "r") as z:
                 all_names = z.namelist()
@@ -457,7 +490,6 @@ def load_lap(file_path, target_sec=None, tol=2.0, verbose=False):
             if r is None:
                 continue
             if target_sec is None:
-                # Collect fastest across all stints
                 if best_result is None or r["lap_time_sec"] < best_result["lap_time_sec"]:
                     best_result = r
             else:
@@ -475,12 +507,11 @@ def load_lap(file_path, target_sec=None, tol=2.0, verbose=False):
         except Exception as e:
             print("ERROR reading CSV %s: %s" % (file_path, e))
             return None
-        # Auto-detect CSV sub-format
         sample = "".join(lines[:20])
         try:
             if any(kw in sample for kw in ("RaceChrono", "RaceStudio", "Solo", "GPS_LatAcc",
                                             "AiM", "Sample Rate")):
-                dl.from_racechrono_log(lines, target_lap=None)  # load all laps
+                dl.from_racechrono_log(lines, target_lap=None)
             else:
                 dl.from_csv_log(lines)
             dl.calculate_math_channels(g_source="auto")
@@ -546,7 +577,6 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
           % (total_delta, "SLOWER" if total_delta > 0 else "FASTER"))
     print("=" * W)
 
-    # Whole-lap stats
     print()
     print("  WHOLE-LAP STATISTICS")
     print("  %-22s  %10s  %10s  %10s" % ("", "Reference", "Target", "Delta"))
@@ -565,7 +595,7 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
     row("Peak Brake",       r_brk.max(),               t_brk.max(),               "kPa",  "%.0f")
 
     print()
-    print("  CORNER-BY-CORNER BREAKDOWN")
+    print("  CORNER-BY-CORNER BREAKDOWN (Auto-Detected Segments)")
     hdr = "  %-22s | %8s | %7s %7s %7s | %7s %7s | %7s %7s | %-28s"
     print(hdr % ("Corner", "Δt (s)",
                  "Vmin R", "Vmin T", "ΔVmin",
@@ -574,7 +604,7 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
                  "Primary Cause"))
     print("  " + "-" * (W - 2))
 
-    priority_list = []  # (time_loss, corner_name, diag, details)
+    priority_list = []
 
     for c in corners:
         s0, s1 = c["start_m"], min(c["end_m"], max_dist)
@@ -591,7 +621,6 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
         r_wot = (r_thr[idx] > 95).mean() * 100
         t_wot = (t_thr[idx] > 95).mean() * 100
 
-        # entry = first 25%, exit = last 25%
         q = max(1, len(idx) // 4)
         r_entry = r_v[idx[:q]].mean(); t_entry = t_v[idx[:q]].mean()
         r_exit  = r_v[idx[-q:]].mean(); t_exit = t_v[idx[-q:]].mean()
@@ -602,7 +631,7 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
         tl_str = "%+.3f" % tl
         flag = " ◄" if tl > 0.3 else ""
         print("  %-22s | %8s | %7.1f %7.1f %+7.1f | %7.0f %7.0f | %7.1f %7.1f | %-28s%s"
-              % (c["name"], tl_str,
+              % (c["name"][:22], tl_str,
                  r_vmin, t_vmin, t_vmin - r_vmin,
                  r_brk_max, t_brk_max,
                  r_wot, t_wot,
@@ -621,7 +650,6 @@ def analyze_and_report(ref, tgt, corners, label_ref="REF", label_tgt="TGT", verb
     print("  Cumulative corner time loss: %+.3fs  |  Whole-lap delta: %+.3fs"
           % (total_corner_loss, total_delta))
 
-    # ── Priority coaching output ─────────────────────────────────────────────
     if priority_list:
         priority_list.sort(key=lambda x: -x["time_loss"])
         print()
@@ -682,15 +710,12 @@ def main():
                         help="Pick a specific lap from the target file by lap time")
     parser.add_argument("--dir",  metavar="DIR",
                         help="Directory of .ld files; fastest is benchmark, rest are targets")
-    parser.add_argument("--track", default=DEFAULT_PRESET,
-                        choices=list(CORNER_PRESETS.keys()),
-                        help="Corner preset to use (default: %s)" % DEFAULT_PRESET)
+    parser.add_argument("--track", default="auto",
+                        help="Track corner preset (default: 'auto' for dynamic curvature detection)")
     parser.add_argument("--tol", type=float, default=2.0,
                         help="Tolerance in seconds when matching --ref_lap/--target_lap (default 2.0)")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
-
-    corners = CORNER_PRESETS[args.track]
 
     # ── Batch directory mode ─────────────────────────────────────────────────
     if args.dir:
@@ -710,6 +735,7 @@ def main():
             sys.exit(1)
         laps.sort(key=lambda x: x["lap_time_sec"])
         ref = laps[0]
+        corners = auto_detect_corner_segments(ref, preset_key=args.track)
         for tgt in laps[1:]:
             analyze_and_report(ref, tgt, corners, verbose=args.verbose)
         sys.exit(0)
@@ -736,6 +762,11 @@ def main():
 
     print("Reference lap : %s  (%.3fs)" % (fmt_lap_time(ref["lap_time_sec"]), ref["lap_time_sec"]))
     print("Target lap    : %s  (%.3fs)" % (fmt_lap_time(tgt["lap_time_sec"]), tgt["lap_time_sec"]))
+
+    # Dynamic corner segment detection on reference lap
+    corners = auto_detect_corner_segments(ref, preset_key=args.track)
+    if args.verbose:
+        print(f"Auto-detected {len(corners)} corner segments on reference lap.")
 
     analyze_and_report(ref, tgt, corners, verbose=args.verbose)
 
