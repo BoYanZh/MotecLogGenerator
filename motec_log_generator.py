@@ -90,14 +90,38 @@ def _normalize_venue(name):
     return name
 
 
+def _auto_detect_log_type(file_path):
+    if file_path.endswith(".rcz"):
+        return "RCZ"
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            sample = f.read(2048)
+        if "RaceChrono" in sample:
+            return "RACECHRONO"
+        if "Session ID" in sample or "Track ID" in sample or "PB Buddy" in sample:
+            return "PBBUDDY"
+        if "Time,GPS Latitude" in sample or "GPS Speed" in sample:
+            return "PBBUDDY"
+        if "Time," in sample and "RPM" in sample:
+            return "ACCESSPORT"
+    except Exception:
+        pass
+    return "CSV"
+
+
 def _process_one(args, stint_override=None, output_override=None):
     stint_arg = stint_override if stint_override is not None else args.stint
     out_base = output_override if output_override is not None else args.output
 
+    active_type = args.log_type
+    if active_type == "AUTO":
+        active_type = _auto_detect_log_type(args.log)
+        print(f"Auto-detected log type: {active_type}")
+
     print("Loading log...")
     data_log = DataLog()
 
-    if args.log_type == "CAN":
+    if active_type == "CAN":
         try:
             import cantools
         except ImportError:
@@ -117,22 +141,27 @@ def _process_one(args, stint_override=None, output_override=None):
 
         print("Extracting data...")
         data_log.from_can_log(lines, can_db)
-    elif args.log_type == "CSV":
-        with open(args.log, "r") as file:
+    elif active_type == "CSV":
+        with open(args.log, "r", encoding="utf-8", errors="ignore") as file:
             lines = file.readlines()
         print("Extracting data...")
-        data_log.from_csv_log(lines, target_lap=args.lap)
-    elif args.log_type == "ACCESSPORT":
-        with open(args.log, "r") as file:
+        data_log.from_csv_log(lines)
+    elif active_type == "ACCESSPORT":
+        with open(args.log, "r", encoding="utf-8", errors="ignore") as file:
             lines = file.readlines()
         print("Extracting data...")
         data_log.from_accessport_log(lines)
-    elif args.log_type == "RACECHRONO":
-        with open(args.log, "r") as file:
+    elif active_type == "RACECHRONO":
+        with open(args.log, "r", encoding="utf-8", errors="ignore") as file:
             lines = file.readlines()
         print("Extracting data...")
         data_log.from_racechrono_log(lines, target_lap=args.lap)
-    elif args.log_type == "RCZ":
+    elif active_type == "PBBUDDY":
+        with open(args.log, "r", encoding="utf-8", errors="ignore") as file:
+            lines = file.readlines()
+        print("Extracting PB Buddy data...")
+        data_log.from_pbbuddy_log(lines, target_lap=args.lap)
+    elif active_type == "RCZ":
         print("Extracting RCZ data directly...")
         data_log.from_rcz_log(args.log, target_lap=args.lap,
                               target_stint=stint_arg, min_lap_sec=args.min_lap_sec)
@@ -232,7 +261,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
     parser.add_argument("log", type=str, help="Path to logfile")
     parser.add_argument("log_type", type=str, help="Type of log to process",
-                        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO", "RCZ"])
+                        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO", "RCZ", "PBBUDDY", "AUTO"])
 
     parser.add_argument("--output", type=str,
                         help="Name of output file, defaults to the same filename as 'log'")

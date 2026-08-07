@@ -566,11 +566,23 @@ class DataLog(object):
         """
         self.clear()
 
-        if not log_lines:
-            return
+        # 1. Dynamically locate Data Header Line
+        data_header_idx = 0
+        import csv
+        for i, line in enumerate(log_lines):
+            line_clean = line.strip().strip('"').strip("'")
+            if not line_clean:
+                continue
+            try:
+                parts = [p.strip().strip('"').strip("'") for p in next(csv.reader([line_clean]))]
+            except Exception:
+                parts = [p.strip().strip('"').strip("'") for p in line_clean.split(",")]
+            if len(parts) >= 2 and parts[0].lower() in ("time", "time (s)", "timestamp"):
+                data_header_idx = i
+                break
 
         # Get the channel names, ignore the first column as it is assumed to be time
-        header = log_lines[0].strip("\n")
+        header = log_lines[data_header_idx].strip("\n")
         channel_names = [name.strip().strip('"').strip("'") for name in header.split(",")[1:]]
 
         # We'll keep a map of names and column numbers for easy channel lookups when parsing rows
@@ -583,7 +595,7 @@ class DataLog(object):
             i += 1
 
         # Go through each line grabbing all the channel values
-        for line in log_lines[1:]:
+        for line in log_lines[data_header_idx + 1:]:
             line = line.strip("\n")
             values = line.split(",")
 
@@ -1031,6 +1043,112 @@ class DataLog(object):
         empty_channels = [name for name, ch in self.channels.items() if not ch.messages]
         for name in empty_channels:
             del self.channels[name]
+
+    def from_pbbuddy_log(self, log_lines, target_lap=None):
+        """ Creates channels populated with messages from a PB Buddy CSV log file. """
+        self.clear()
+        self.laps_info = {}
+        file_p = getattr(self, "log_file_path", "")
+
+        if not log_lines:
+            return
+
+        import csv
+
+        # 1. Scan for Data Header Line (contains >= 3 columns and starts with Time/timestamp)
+        data_header_idx = -1
+        for i, line in enumerate(log_lines):
+            line_clean = line.strip().strip('"').strip("'")
+            if not line_clean:
+                continue
+            try:
+                parts = [p.strip().strip('"').strip("'") for p in next(csv.reader([line_clean]))]
+            except Exception:
+                parts = [p.strip().strip('"').strip("'") for p in line_clean.split(",")]
+            if len(parts) >= 3 and parts[0].lower() in ("time", "time (s)", "timestamp"):
+                data_header_idx = i
+                break
+
+        if data_header_idx == -1:
+            print("ERROR: Could not locate PB Buddy CSV data header line.")
+            return
+
+        # 2. Process all lines BEFORE Data Header Line as Key-Value Metadata
+        for line in log_lines[:data_header_idx]:
+            line_clean = line.strip().strip('"').strip("'")
+            if not line_clean:
+                continue
+            try:
+                parts = [p.strip().strip('"').strip("'") for p in next(csv.reader([line_clean]))]
+            except Exception:
+                parts = [p.strip().strip('"').strip("'") for p in line_clean.split(",")]
+            if len(parts) == 2:
+                key, val = parts[0], parts[1]
+                if key == "Track name":
+                    self.metadata["venue_name"] = val
+                elif key == "Date":
+                    self.metadata["date"] = val
+                elif key == "Time":
+                    self.metadata["time"] = val
+                elif key == "Session name":
+                    self.metadata["session"] = val
+
+        # Extract datetime if date/time present
+        if "date" in self.metadata and "time" in self.metadata:
+            try:
+                dt_str = f"{self.metadata['date']} {self.metadata['time']}"
+                self.datetime = datetime.datetime.strptime(dt_str, "%m/%d/%y %H:%M:%S")
+            except Exception:
+                pass
+
+        # 3. Read Headers and Units Row
+        header_line = log_lines[data_header_idx].strip()
+        headers = [h.strip().strip('"').strip("'") for h in header_line.split(",")]
+
+        units = []
+        if data_header_idx + 1 < len(log_lines):
+            next_line = log_lines[data_header_idx + 1].strip()
+            unit_parts = [u.strip().strip('"').strip("'") for u in next_line.split(",")]
+            if unit_parts and unit_parts[0].lower() in ("sec", "s", "seconds", "m/s", "deg", "m"):
+                units = unit_parts
+
+        mapping = {
+            "Time": ("Time", "s", 3),
+            "GPS Latitude": ("GPS Latitude", "deg", 7),
+            "GPS Longitude": ("GPS Longitude", "deg", 7),
+            "GPS Speed": ("Ground Speed", "km/h", 5),  # Convert m/s -> km/h
+            "GPS Heading": ("GPS Heading", "deg", 3),
+            "GPS Altitude": ("GPS Altitude", "m", 3),
+        }
+
+        chan_indices = {}
+        for idx, h in enumerate(headers):
+            if h in mapping:
+                out_name, out_unit, out_dec = mapping[h]
+                self.add_channel(out_name, out_unit, float, out_dec)
+                chan_indices[idx] = (h, out_name)
+            elif h != "Time":
+                unit = units[idx] if idx < len(units) else ""
+                self.add_channel(h, unit, float, 3)
+                chan_indices[idx] = (h, h)
+
+        # 4. Parse Data Rows
+        start_data_idx = data_header_idx + (2 if units else 1)
+        for line in log_lines[start_data_idx:]:
+            line_s = line.strip()
+            if not line_s or line_s.startswith("//") or line_s.startswith("#"):
+                continue
+            parts = line_s.split(",")
+            if len(parts) >= len(headers):
+                try:
+                    t = float(parts[0])
+                    for idx, (orig_name, out_name) in chan_indices.items():
+                        val = float(parts[idx])
+                        if orig_name == "GPS Speed":
+                            val = val * 3.6  # m/s -> km/h
+                        self.channels[out_name].messages.append(Message(t, val))
+                except ValueError:
+                    continue
 
     def from_rcz_log(self, rcz_file_path, target_lap=None, target_stint=None, min_lap_sec=15.0):
         """ Creates channels populated with messages directly from a RaceChrono .rcz archive.

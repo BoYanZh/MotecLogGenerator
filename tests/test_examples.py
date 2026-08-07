@@ -23,11 +23,23 @@ def _dedup_channels(log):
 
 
 # ---------------------------------------------------------------------------
-# CSV
+# CSV & PB BUDDY
 # ---------------------------------------------------------------------------
 def test_csv_smoke():
     log = DataLog()
     log.from_csv_log(_read_lines("csv_sample.csv"))
+
+
+def test_pbbuddy_smoke():
+    log = DataLog()
+    lines = _read_lines("pbbuddy_sample.csv")
+    log.from_pbbuddy_log(lines)
+    _dedup_channels(log)
+    assert len(log.channels) > 0
+    assert "Ground Speed" in log.channels
+    assert "GPS Latitude" in log.channels
+    assert "GPS Longitude" in log.channels
+    assert log.metadata.get("venue_name") == "Thunderhill East (Cyclone)"
     assert len(log.channels) >= 3, f"Too few channels: {len(log.channels)}"
     assert log.duration() > 0
     _dedup_channels(log)
