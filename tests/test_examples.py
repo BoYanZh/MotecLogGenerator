@@ -46,7 +46,7 @@ def test_pbbuddy_smoke():
 def test_aim_solo_smoke():
     log = DataLog()
     lines = _read_lines("aim_solo_sample.csv")
-    log.from_aim_log(lines)
+    log.from_racechrono_log(lines)
     _dedup_channels(log)
     assert len(log.channels) > 0
     assert "Ground Speed" in log.channels

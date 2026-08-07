@@ -759,7 +759,7 @@ class DataLog(object):
             if not raw_name or raw_name in ignored_columns:
                 continue
 
-            raw_lower = raw_name.lower().strip()
+            raw_lower = raw_name.lower().strip().replace("_", " ").replace("-", " ")
             if raw_lower == "lap_number" or raw_lower == "lap":
                 lap_number_idx = i + 1
 
@@ -1167,134 +1167,6 @@ class DataLog(object):
                         val = float(parts[idx])
                         if orig_name == "GPS Speed":
                             val = val * 3.6  # m/s -> km/h
-                        self.channels[out_name].messages.append(Message(t, val))
-                except ValueError:
-                    continue
-
-    def from_aim_log(self, log_lines, target_lap=None):
-        """ Creates channels populated with messages from an AiM Solo / RaceStudio CSV log file. """
-        self.clear()
-        self.laps_info = {}
-        file_p = getattr(self, "log_file_path", "")
-
-        if not log_lines:
-            return
-
-        import csv
-
-        # 1. Scan for Data Header Line
-        data_header_idx = -1
-        for i, line in enumerate(log_lines):
-            line_clean = line.strip().strip('"').strip("'")
-            if not line_clean:
-                continue
-            try:
-                parts = [p.strip().strip('"').strip("'") for p in next(csv.reader([line_clean]))]
-            except Exception:
-                parts = [p.strip().strip('"').strip("'") for p in line_clean.split(",")]
-            if len(parts) >= 3 and parts[0].lower() in ("time", "time (s)", "timestamp"):
-                data_header_idx = i
-                break
-
-        if data_header_idx == -1:
-            print("ERROR: Could not locate AiM CSV data header line.")
-            return
-
-        # 2. Process Metadata Lines before Data Header Line
-        for line in log_lines[:data_header_idx]:
-            line_s = line.strip()
-            if not line_s:
-                continue
-            try:
-                parts = [p.strip().strip('"').strip("'") for p in next(csv.reader([line_s]))]
-            except Exception:
-                parts = [p.strip().strip('"').strip("'") for p in line_s.split(",")]
-            if len(parts) == 2:
-                key, val = parts[0], parts[1]
-                self.metadata[key] = val
-                if key.lower() in ("venue", "track name", "track"):
-                    self.metadata["venue_name"] = val
-                elif key.lower() in ("date",):
-                    self.metadata["date"] = val
-                elif key.lower() in ("time",):
-                    self.metadata["time"] = val
-                elif key.lower() in ("driver",):
-                    self.metadata["driver"] = val
-                elif key.lower() in ("vehicle", "car"):
-                    self.metadata["vehicle_id"] = val
-
-        # Extract datetime if Date and Time present
-        if "date" in self.metadata and "time" in self.metadata:
-            try:
-                dt_str = f"{self.metadata['date']} {self.metadata['time']}"
-                for fmt in ("%m/%d/%Y %H:%M:%S", "%m/%d/%y %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y-%m-%d %H:%M:%S"):
-                    try:
-                        self.datetime = datetime.datetime.strptime(dt_str, fmt)
-                        break
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-        # 3. Read Headers and Units Row
-        header_line = log_lines[data_header_idx].strip()
-        try:
-            headers = [h.strip().strip('"').strip("'") for h in next(csv.reader([header_line]))]
-        except Exception:
-            headers = [h.strip().strip('"').strip("'") for h in header_line.split(",")]
-
-        units = []
-        if data_header_idx + 1 < len(log_lines):
-            next_line = log_lines[data_header_idx + 1].strip()
-            try:
-                unit_parts = [u.strip().strip('"').strip("'") for u in next(csv.reader([next_line]))]
-            except Exception:
-                unit_parts = [u.strip().strip('"').strip("'") for u in next_line.split(",")]
-            if unit_parts and unit_parts[0].lower() in ("s", "sec", "seconds", "mph", "g", "deg", "ft", "m"):
-                units = unit_parts
-
-        mapping = {
-            "Time": ("Time", "s", 3),
-            "GPS_Speed": ("Ground Speed", "km/h", 5),
-            "Speed": ("Ground Speed", "km/h", 5),
-            "GPS_LatAcc": ("CG Accel Lateral", "G", 3),
-            "GPS_LonAcc": ("CG Accel Longitudinal", "G", 3),
-            "GPS_Lat": ("GPS Latitude", "deg", 7),
-            "GPS_Latitude": ("GPS Latitude", "deg", 7),
-            "GPS_Lon": ("GPS Longitude", "deg", 7),
-            "GPS_Longitude": ("GPS Longitude", "deg", 7),
-            "GPS_Heading": ("GPS Heading", "deg", 3),
-            "GPS_Altitude": ("GPS Altitude", "m", 3),
-        }
-
-        chan_indices = {}
-        for idx, h in enumerate(headers):
-            if h in mapping:
-                out_name, out_unit, out_dec = mapping[h]
-                self.add_channel(out_name, out_unit, float, out_dec)
-                unit_val = units[idx] if idx < len(units) else ""
-                chan_indices[idx] = (h, out_name, unit_val)
-            elif h != "Time":
-                unit_val = units[idx] if idx < len(units) else ""
-                self.add_channel(h, unit_val, float, 3)
-                chan_indices[idx] = (h, h, unit_val)
-
-        # 4. Parse Data Rows
-        start_data_idx = data_header_idx + (2 if units else 1)
-        for line in log_lines[start_data_idx:]:
-            line_s = line.strip()
-            if not line_s or line_s.startswith("//") or line_s.startswith("#"):
-                continue
-            parts = line_s.split(",")
-            if len(parts) >= len(headers):
-                try:
-                    t = float(parts[0].strip('"').strip("'"))
-                    for idx, (orig_name, out_name, unit_val) in chan_indices.items():
-                        val = float(parts[idx].strip('"').strip("'"))
-                        if orig_name in ("GPS_Speed", "Speed") and unit_val.lower() == "mph":
-                            val = val * 1.60934  # mph -> km/h
-                        elif orig_name == "GPS_Altitude" and unit_val.lower() == "ft":
-                            val = val * 0.3048  # ft -> m
                         self.channels[out_name].messages.append(Message(t, val))
                 except ValueError:
                     continue
