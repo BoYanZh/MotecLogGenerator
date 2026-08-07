@@ -9,7 +9,7 @@ Mathematical Transformation:
   3. Map to WGS84 GPS coordinates centered at Thunderhill S/F (39.540017 N, -122.331175 W)
 
 Usage:
-    python align_acti_gps.py [path_to_acti_ld_or_dir] [--output_dir data/acti_aligned]
+    python tools/align_acti_gps.py [path_to_acti_ld_or_dir] [--output_dir data/acti_aligned]
 """
 import argparse
 import os
@@ -19,7 +19,10 @@ import json
 from scipy.optimize import minimize
 from scipy.spatial import cKDTree
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from ldparser.ldparser import ldData
 from data_log import DataLog, Message
 from motec_log import MotecLog
@@ -110,7 +113,7 @@ def align_acti_file(input_ld, output_dir, track_cfg):
             times = np.linspace(0, len(c.data) / freq, len(c.data))
             dl.channels[c.name].messages = [Message(times[i], float(c.data[i])) for i in range(len(c.data))]
 
-    # Add GPS Latitude / Longitude & Real GPS Latitude / Longitude
+    # Add GPS Latitude / Longitude
     times = np.linspace(0, len(lat) / ch_x.freq, len(lat))
 
     dl.add_channel("GPS Latitude", "deg", float, 7)
@@ -118,12 +121,6 @@ def align_acti_file(input_ld, output_dir, track_cfg):
 
     dl.add_channel("GPS Longitude", "deg", float, 7)
     dl.channels["GPS Longitude"].messages = [Message(times[i], float(lon[i])) for i in range(len(lon))]
-
-    dl.add_channel("Real GPS Latitude", "deg", float, 7)
-    dl.channels["Real GPS Latitude"].messages = [Message(times[i], float(lat[i])) for i in range(len(lat))]
-
-    dl.add_channel("Real GPS Longitude", "deg", float, 7)
-    dl.channels["Real GPS Longitude"].messages = [Message(times[i], float(lon[i])) for i in range(len(lon))]
 
     # Build MotecLog with full header metadata preserved
     ml = MotecLog()
