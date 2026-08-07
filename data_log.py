@@ -207,9 +207,7 @@ class DataLog(object):
             self._derive_cg_accel_longitudinal(force=False)
 
         self._derive_smoothed_accel()
-        self._calculate_kinematics()
         self._calculate_g_sum()
-        self._derive_brake_pos()
         self._calculate_input_rates()
         self._mirror_throttle_accel()
 
@@ -266,77 +264,6 @@ class DataLog(object):
         self.add_channel("CG Accel Longitudinal", "G", float, 2)
         self.channels["CG Accel Longitudinal"].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
 
-    # --- GR86 vehicle dynamics constants ---
-    # These are tuned specifically for the Toyota GR86 / Subaru BRZ (2022+).
-    # The tire slip angle and understeer index channels will be incorrect for
-    # any other vehicle. To adapt, replace these with values for your car.
-    _GR86_STEERING_RATIO = 13.5          # steering wheel angle : road wheel angle
-    _GR86_WHEELBASE_M = 2.575            # distance between front and rear axles
-    _GR86_CG_TO_FRONT_AXLE_M = 1.25      # distance from center of gravity to front axle
-    _GR86_CG_TO_REAR_AXLE_M = 1.325      # distance from center of gravity to rear axle
-    _GR86_LAT_VEL_TAU_S = 2.0            # time constant for lateral velocity complementary filter
-
-    def _calculate_kinematics(self):
-        required = ["Ground Speed", "CG Accel Lateral", "Chassis Yaw Rate"]
-        if not all(r in self.channels for r in required):
-            return
-        vx_chan = self.channels["Ground Speed"]
-        n = min(len(self.channels[r].messages) for r in required)
-        if n < 2:
-            return
-        time = np.array([m.timestamp for m in vx_chan.messages[:n]])
-        vx = np.array([m.value for m in vx_chan.messages[:n]])
-        if vx_chan.units == "km/h":
-            vx /= 3.6
-        ay = np.array([m.value * 9.80665 for m in self.channels["CG Accel Lateral"].messages[:n]])
-        yaw_rate_degs = np.array([m.value for m in self.channels["Chassis Yaw Rate"].messages[:n]])
-        yaw_rate = np.radians(yaw_rate_degs * -1.0)
-
-        dt = np.zeros(n)
-        dt[1:] = np.diff(time)
-
-        vy = np.zeros(n)
-        beta = np.zeros(n)
-        tau = self._GR86_LAT_VEL_TAU_S
-
-        for i in range(1, n):
-            vy_dot = ay[i] - (vx[i] * yaw_rate[i])
-            alpha = np.exp(-dt[i] / tau)
-            vy[i] = (vy[i - 1] + vy_dot * dt[i]) * alpha
-            if abs(ay[i]) < 0.49 and abs(yaw_rate_degs[i]) < 1.0:
-                vy[i] = 0.0
-            if vx[i] > 5.0:
-                beta[i] = np.arctan2(vy[i], vx[i])
-
-        ratio = self._GR86_STEERING_RATIO
-        wheelbase = self._GR86_WHEELBASE_M
-        lf = self._GR86_CG_TO_FRONT_AXLE_M
-        lr = self._GR86_CG_TO_REAR_AXLE_M
-
-        slip_f = np.zeros(n)
-        slip_r = np.zeros(n)
-        steer_rad = np.zeros(n)
-        if "Steering Angle" in self.channels:
-            steer_deg = np.array([m.value for m in self.channels["Steering Angle"].messages])
-            steer_rad = np.radians(steer_deg / ratio)
-
-        for i in range(n):
-            if vx[i] > 5.0:
-                slip_f[i] = np.degrees(steer_rad[i] - np.arctan2(vy[i] + yaw_rate[i] * lf, vx[i]))
-                slip_r[i] = np.degrees(-np.arctan2(vy[i] - yaw_rate[i] * lr, vx[i]))
-
-        for name in ("Tire Slip Angle FL", "Tire Slip Angle FR", "Tire Slip Angle RL", "Tire Slip Angle RR"):
-            self.add_channel(name, "deg", float, 2)
-            src_data = slip_f if "F" in name else slip_r
-            self.channels[name].messages = [Message(time[i], src_data[i]) for i in range(n)]
-
-        us_index = np.zeros(n)
-        for i in range(n):
-            if vx[i] > 5.0:
-                us_index[i] = np.degrees(steer_rad[i]) - np.degrees(wheelbase * yaw_rate[i] / vx[i])
-        self.add_channel("Understeer Index", "deg", float, 2)
-        self.channels["Understeer Index"].messages = [Message(time[i], us_index[i]) for i in range(n)]
-
     def _calculate_g_sum(self):
         if "CG Accel Longitudinal" not in self.channels or "CG Accel Lateral" not in self.channels:
             return
@@ -351,22 +278,6 @@ class DataLog(object):
         g_sum = np.sqrt(ax ** 2 + ay_g ** 2)
         self.add_channel("G Force Combined", "G", float, 2)
         self.channels["G Force Combined"].messages = [Message(time_g[i], g_sum[i]) for i in range(n)]
-
-    def _derive_brake_pos(self):
-        # GR86 empirical: brake master cylinder pressure ~96 kPa per 1% brake pedal position
-        if "Brake Press" not in self.channels or "Brake Pos" in self.channels:
-            return
-        press_chan = self.channels["Brake Press"]
-        n = len(press_chan.messages)
-        if n < 1:
-            return
-        time_p = [m.timestamp for m in press_chan.messages]
-        press_vals = np.array([m.value for m in press_chan.messages])
-        if press_chan.units == "bar":
-            press_vals *= 100.0
-        bpos = np.clip(press_vals / 96.0, 0.0, 100.0)
-        self.add_channel("Brake Pos", "%", float, 2)
-        self.channels["Brake Pos"].messages = [Message(time_p[i], bpos[i]) for i in range(n)]
 
     def _calculate_input_rates(self):
         self.__calculate_rate("Steering Angle", "deg/s")

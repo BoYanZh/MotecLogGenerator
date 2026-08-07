@@ -30,11 +30,6 @@ CH_COOLANT_TEMP     = "Coolant Temp"
 CH_ENGINE_OIL_TEMP  = "Engine Oil Temp"
 CH_GEAR             = "Gear"
 CH_YAW_RATE         = "Chassis Yaw Rate"
-CH_SLIP_ANGLE_FL    = "Tire Slip Angle FL"
-CH_SLIP_ANGLE_FR    = "Tire Slip Angle FR"
-CH_SLIP_ANGLE_RL    = "Tire Slip Angle RL"
-CH_SLIP_ANGLE_RR    = "Tire Slip Angle RR"
-CH_UNDERSTEER_INDEX = "Understeer Index"
 CH_G_COMBINED       = "G Force Combined"
 
 DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, CH_GPS_FIX, CH_GPS_SATS}
