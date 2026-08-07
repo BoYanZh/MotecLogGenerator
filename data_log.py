@@ -18,7 +18,8 @@ from constants import (
     CH_BRAKE_PRESS, CH_BRAKE_POS, CH_ENGINE_RPM, CH_STEERING_ANGLE, CH_COOLANT_TEMP,
     CH_ENGINE_OIL_TEMP, CH_GEAR, CH_YAW_RATE, CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR,
     CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR, CH_UNDERSTEER_INDEX, CH_G_COMBINED,
-    CHANNEL_ALIASES
+    CHANNEL_ALIASES,
+    IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP, IBT_BRAKE_PRESS_MAP,
 )
 
 DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, "GPS Fix", CH_GPS_SATS}
@@ -1223,43 +1224,13 @@ class DataLog(object):
             for i in range(n_ticks):
                 ch.messages.append(Message(times[i], float(vals[i])))
 
-        _G = 9.80665
-        _ibt_map = [
-            ("Speed",              CH_GROUND_SPEED,     "km/h",    2, lambda x: x * 3.6),
-            ("Lat",                CH_GPS_LATITUDE,     "deg",     7, None),
-            ("Lon",                CH_GPS_LONGITUDE,    "deg",     7, None),
-            ("Alt",                CH_GPS_ALTITUDE,     "m",       2, None),
-            ("LatAccel",           CH_CG_ACCEL_LAT,     "G",       4, lambda x: x / _G),
-            ("LongAccel",          CH_CG_ACCEL_LON,     "G",       4, lambda x: x / _G),
-            ("YawRate",            CH_YAW_RATE,         "deg/s",   3, np.degrees),
-            ("YawNorth",           CH_GPS_HEADING,      "deg",     2, np.degrees),
-            ("SteeringWheelAngle", CH_STEERING_ANGLE,   "deg",     2, np.degrees),
-            ("Throttle",           CH_THROTTLE_POS,     "%",       2, lambda x: x * 100.0),
-            ("Brake",              CH_BRAKE_POS,        "%",       2, lambda x: x * 100.0),
-            ("RPM",                CH_ENGINE_RPM,       "rpm",     0, None),
-            ("Gear",               CH_GEAR,             "",        0, None),
-            ("WaterTemp",          CH_COOLANT_TEMP,     "C",       2, None),
-            ("OilTemp",            CH_ENGINE_OIL_TEMP,  "C",       2, None),
-            ("OilPress",           "Engine Oil Press",  "kPa",     2, lambda x: x * 100.0),
-            ("ManifoldPress",      "Manifold Press",    "kPa",     2, lambda x: x * 100.0),
-            ("FuelLevel",          "Fuel Level",        "l",       2, None),
-            ("Voltage",            "Battery Voltage",   "V",       2, None),
-            ("TrackTemp",          "Track Temp",        "C",       2, None),
-            ("LapDistPct",         "Lap Distance",      "%",       2, lambda x: x * 100.0),
-        ]
-        for ibt_name, ch_name, units, dec, conv in _ibt_map:
+        for ibt_name, ch_name, units, dec, conv in IBT_CHANNEL_MAP:
             _add_ch(ibt_name, ch_name, units, dec, conv)
 
-        for ibt_name, ch_name in [
-            ("LFspeed", "Wheel Speed FL"), ("RFspeed", "Wheel Speed FR"),
-            ("LRspeed", "Wheel Speed RL"), ("RRspeed", "Wheel Speed RR"),
-        ]:
+        for ibt_name, ch_name in IBT_WHEEL_SPEED_MAP:
             _add_ch(ibt_name, ch_name, "km/h", 2, lambda x: x * 3.6)
 
-        for ibt_name, ch_name in [
-            ("LFbrakeLinePress", "Brake Press FL"), ("RFbrakeLinePress", "Brake Press FR"),
-            ("LRbrakeLinePress", "Brake Press RL"), ("RRbrakeLinePress", "Brake Press RR"),
-        ]:
+        for ibt_name, ch_name in IBT_BRAKE_PRESS_MAP:
             _add_ch(ibt_name, ch_name, "kPa", 2, lambda x: x * 100.0)
 
         # --- 6. Lap detection: raw Lap counter transitions ---

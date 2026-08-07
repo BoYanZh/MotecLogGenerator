@@ -3,8 +3,10 @@ Centralized Constants & Channel Name Mapping Definitions for MotecLogGenerator.
 
 Provides a Single Source of Truth for:
   - Canonical MoTeC channel names and standard units.
-  - Multi-source channel alias mappings (RaceChrono, AiM Solo, PB Buddy, VBOX, Cobb, Generic CSVs).
+  - Multi-source channel alias mappings (iRacing, RaceChrono, AiM Solo, PB Buddy, VBOX, Cobb, Generic CSVs).
 """
+
+import numpy as np
 
 # ----------------------------------------------------------------------------
 # Canonical MoTeC Channel Names (Single Source of Truth)
@@ -121,3 +123,46 @@ CHANNEL_ALIASES = {
     "engine_oil_temp-canbus": (CH_ENGINE_OIL_TEMP, "C", 2),
     "Gear":                   (CH_GEAR, "", 0),
 }
+
+# ----------------------------------------------------------------------------
+# iRacing .ibt native channel -> MoTeC canonical mapping
+# Each tuple: (ibt_var_name, ch_name, units, decimals, convert_fn_or_None)
+# ----------------------------------------------------------------------------
+_G = 9.80665
+IBT_CHANNEL_MAP = [
+    ("Speed",              CH_GROUND_SPEED,     "km/h",    2, lambda x: x * 3.6),
+    ("Lat",                CH_GPS_LATITUDE,     "deg",     7, None),
+    ("Lon",                CH_GPS_LONGITUDE,    "deg",     7, None),
+    ("Alt",                CH_GPS_ALTITUDE,     "m",       2, None),
+    ("LatAccel",           CH_CG_ACCEL_LAT,     "G",       4, lambda x: x / _G),
+    ("LongAccel",          CH_CG_ACCEL_LON,     "G",       4, lambda x: x / _G),
+    ("YawRate",            CH_YAW_RATE,         "deg/s",   3, np.degrees),
+    ("YawNorth",           CH_GPS_HEADING,      "deg",     2, np.degrees),
+    ("SteeringWheelAngle", CH_STEERING_ANGLE,   "deg",     2, np.degrees),
+    ("Throttle",           CH_THROTTLE_POS,     "%",       2, lambda x: x * 100.0),
+    ("Brake",              CH_BRAKE_POS,        "%",       2, lambda x: x * 100.0),
+    ("RPM",                CH_ENGINE_RPM,       "rpm",     0, None),
+    ("Gear",               CH_GEAR,             "",        0, None),
+    ("WaterTemp",          CH_COOLANT_TEMP,     "C",       2, None),
+    ("OilTemp",            CH_ENGINE_OIL_TEMP,  "C",       2, None),
+    ("OilPress",           "Engine Oil Press",  "kPa",     2, lambda x: x * 100.0),
+    ("ManifoldPress",      "Manifold Press",    "kPa",     2, lambda x: x * 100.0),
+    ("FuelLevel",          "Fuel Level",        "l",       2, None),
+    ("Voltage",            "Battery Voltage",   "V",       2, None),
+    ("TrackTemp",          "Track Temp",        "C",       2, None),
+    ("LapDistPct",         "Lap Distance",      "%",       2, lambda x: x * 100.0),
+]
+
+IBT_WHEEL_SPEED_MAP = [
+    ("LFspeed", "Wheel Speed FL"),
+    ("RFspeed", "Wheel Speed FR"),
+    ("LRspeed", "Wheel Speed RL"),
+    ("RRspeed", "Wheel Speed RR"),
+]
+
+IBT_BRAKE_PRESS_MAP = [
+    ("LFbrakeLinePress", "Brake Press FL"),
+    ("RFbrakeLinePress", "Brake Press FR"),
+    ("LRbrakeLinePress", "Brake Press RL"),
+    ("RRbrakeLinePress", "Brake Press RR"),
+]
