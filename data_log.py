@@ -166,7 +166,6 @@ class DataLog(object):
         self._derive_brake_pos()
         self._calculate_input_rates()
         self._mirror_throttle_accel()
-        self._mirror_gps_channels()
 
     def _derive_smoothed_accel(self, window_sec=0.5):
         """ Derive 0.5s moving average smoothed G channels for clean G-G diagrams in MoTeC. """
@@ -329,14 +328,7 @@ class DataLog(object):
         self.__calculate_rate("Brake Pos", "%/s")
 
     def _mirror_gps_channels(self):
-        if "GPS Latitude" in self.channels and "Real GPS Latitude" not in self.channels:
-            lat_chan = self.channels["GPS Latitude"]
-            self.add_channel("Real GPS Latitude", "deg", float, 7)
-            self.channels["Real GPS Latitude"].messages = [Message(m.timestamp, m.value) for m in lat_chan.messages]
-        if "GPS Longitude" in self.channels and "Real GPS Longitude" not in self.channels:
-            lon_chan = self.channels["GPS Longitude"]
-            self.add_channel("Real GPS Longitude", "deg", float, 7)
-            self.channels["Real GPS Longitude"].messages = [Message(m.timestamp, m.value) for m in lon_chan.messages]
+        pass
 
     def _mirror_throttle_accel(self):
         if "Accelerator Pos" not in self.channels and "Throttle Pos" in self.channels:
