@@ -1,6 +1,8 @@
 # MotecLogGenerator Examples
 
-This directory contains some sample files to use with the MoTeC log generator tool.
+This directory contains anonymized, privacy-safe sample files for testing and demonstrating the MoTeC log generator tool across different logger formats.
+
+All personal identifiers (e.g. driver names, specific vehicle IDs, private locations) in these sample files have been sanitized.
 
 ## CAN
 Files:
@@ -12,7 +14,7 @@ Usage:
 python3 ../motec_log_generator.py can_sample.log CAN --dbc sample_can_spec.dbc
 ```
 
-## CSV
+## Generic CSV
 Files:
 * `csv_sample.csv`
 
@@ -21,7 +23,29 @@ Usage:
 python3 ../motec_log_generator.py csv_sample.csv CSV
 ```
 
-## Accessport
+## PB Buddy
+Files:
+* `pbbuddy_sample.csv`
+
+Usage:
+```bash
+python3 ../motec_log_generator.py pbbuddy_sample.csv PBBUDDY
+# Or auto-detect:
+python3 ../motec_log_generator.py pbbuddy_sample.csv AUTO
+```
+
+## AiM Solo / RaceStudio
+Files:
+* `aim_solo_sample.csv`
+
+Usage:
+```bash
+python3 ../motec_log_generator.py aim_solo_sample.csv AIM
+# Or auto-detect:
+python3 ../motec_log_generator.py aim_solo_sample.csv AUTO
+```
+
+## COBB Accessport
 Files:
 * `accessport_sample.csv`
 

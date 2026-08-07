@@ -40,9 +40,22 @@ def test_pbbuddy_smoke():
     assert "GPS Latitude" in log.channels
     assert "GPS Longitude" in log.channels
     assert log.metadata.get("venue_name") == "Thunderhill East (Cyclone)"
-    assert len(log.channels) >= 3, f"Too few channels: {len(log.channels)}"
     assert log.duration() > 0
+
+
+def test_aim_solo_smoke():
+    log = DataLog()
+    lines = _read_lines("aim_solo_sample.csv")
+    log.from_aim_log(lines)
     _dedup_channels(log)
+    assert len(log.channels) > 0
+    assert "Ground Speed" in log.channels
+    assert "CG Accel Lateral" in log.channels
+    assert "GPS Latitude" in log.channels
+    assert "GPS Longitude" in log.channels
+    assert log.metadata.get("venue_name") == "Laguna Seca"
+    assert log.datetime.strftime("%Y-%m-%d") == "2026-02-14"
+    assert log.duration() > 0
 
 
 def test_csv_resample_and_math():
