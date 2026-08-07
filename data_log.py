@@ -1159,7 +1159,7 @@ class DataLog(object):
                 driver = ls.split(":", 1)[1].strip()
             elif ls.startswith("CarScreenName:"):
                 car = ls.split(":", 1)[1].strip()
-            elif ls.startswith("WeekendDate:"):
+            elif ls.startswith("Date:"):
                 weekend_date = ls.split(":", 1)[1].strip()
 
         # Parse session datetime from YAML WeekendDate field (e.g. "2026-08-07")
