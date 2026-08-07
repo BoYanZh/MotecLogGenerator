@@ -114,6 +114,7 @@ Standalone helper utilities are located in the [`tools/`](file:///C:/Users/boyan
 1. **`python tools/verify_log.py <log.ld>`**: Validates MoTeC `.ld` header integrity, channel bounds, and `.ldx` XML beacon sorting.
 2. **`python tools/align_acti_gps.py <acti_log.ld>`**: Aligns Assetto Corsa ACTI simulator logs with real-world WGS84 GPS coordinates across any track via ICP point-cloud calibration.
 3. **`python tools/analyze_tire_grip.py --dir data/exported`**: Analyzes sustained 1s G-force grip metrics across MoTeC sessions.
+4. **`python tools/compare_laps.py --dir data/exported`**: Compares lap times, sector splits, and generates a ranked leaderboard across sessions.
 
 See [`tools/README.md`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/README.md) for detailed documentation.
 

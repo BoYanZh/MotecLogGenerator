@@ -66,3 +66,23 @@ python tools/analyze_tire_grip.py --dir data/exported --min_spd 60
 * **`P99`**: 99th percentile of $|a_y|$ while moving
 * **`BestSeg`**: Duration (s) of the longest continuous $>0.7\text{G}$ cornering segment
 * **`SegMean`**: Mean $|a_y|$ within that longest segment
+
+---
+
+## 4. Lap Time & Telemetry Leaderboard Tool (`compare_laps.py`)
+
+Inspects exported MoTeC `.ld` / `.ldx` files across a directory and generates a sorted **Lap Time Leaderboard** with lap time deltas, fastest lap highlights ⭐, and sector split breakdowns.
+
+### Usage
+```bash
+# Analyze all exported .ld sessions and display leaderboard & lap breakdowns
+python tools/compare_laps.py --dir data/exported
+
+# Only display the leaderboard (fastest lap per session)
+python tools/compare_laps.py --dir data/exported --fastest_only
+```
+
+### Metrics & Features:
+* **Leaderboard Ranking**: Ranks sessions by fastest lap time with delta gap (s) relative to the overall session benchmark.
+* **Sector Split Breakdown**: Parses `.ldx` sector beacons (`S1`, `S2`, `S3`) to show split time progressions.
+* **Metadata Extraction**: Unpacks driver, vehicle, track venue, session date, and lap counts directly from MoTeC headers.
