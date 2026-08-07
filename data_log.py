@@ -13,16 +13,12 @@ def _interp_zoh(times_target, times_src, values_src):
 
 
 from constants import (
-    CH_GROUND_SPEED, CH_CG_ACCEL_LAT, CH_CG_ACCEL_LON, CH_GPS_LATITUDE, CH_GPS_LONGITUDE,
-    CH_GPS_HEADING, CH_GPS_ALTITUDE, CH_GPS_SATS, CH_LAP_NUMBER, CH_THROTTLE_POS,
-    CH_BRAKE_PRESS, CH_BRAKE_POS, CH_ENGINE_RPM, CH_STEERING_ANGLE, CH_COOLANT_TEMP,
-    CH_ENGINE_OIL_TEMP, CH_GEAR, CH_YAW_RATE, CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR,
-    CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR, CH_UNDERSTEER_INDEX, CH_G_COMBINED,
+    CH_GPS_SATS, CH_GPS_FIX, CH_LAP_NUMBER, CH_GEAR,
     CHANNEL_ALIASES,
     IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP, IBT_BRAKE_PRESS_MAP,
 )
 
-DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, "GPS Fix", CH_GPS_SATS}
+DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, CH_GPS_FIX, CH_GPS_SATS}
 
 
 def _parse_vbo_latlon(val_str):
@@ -743,7 +739,7 @@ class DataLog(object):
             "altitude": {"name": "GPS Altitude", "units": "m"},
             "bearing": {"name": "GPS Heading", "units": "deg"},
             "device_battery_level": {"name": "Device Battery", "units": "%"},
-            "fix_type": {"name": "GPS Fix", "units": ""},
+            "fix_type": {"name": CH_GPS_FIX, "units": ""},
             "latitude": {"name": "GPS Latitude", "units": "deg"},
             "longitude": {"name": "GPS Longitude", "units": "deg"},
             "satellites": {"name": "GPS Satellites", "units": ""},
