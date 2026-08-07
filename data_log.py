@@ -12,7 +12,16 @@ def _interp_zoh(times_target, times_src, values_src):
     return values_src[idx]
 
 
-DISCRETE_CHANNELS = {"Gear", "Lap Number", "GPS Fix", "GPS Satellites"}
+from constants import (
+    CH_GROUND_SPEED, CH_CG_ACCEL_LAT, CH_CG_ACCEL_LON, CH_GPS_LATITUDE, CH_GPS_LONGITUDE,
+    CH_GPS_HEADING, CH_GPS_ALTITUDE, CH_GPS_SATS, CH_LAP_NUMBER, CH_THROTTLE_POS,
+    CH_BRAKE_PRESS, CH_BRAKE_POS, CH_ENGINE_RPM, CH_STEERING_ANGLE, CH_COOLANT_TEMP,
+    CH_ENGINE_OIL_TEMP, CH_GEAR, CH_YAW_RATE, CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR,
+    CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR, CH_UNDERSTEER_INDEX, CH_G_COMBINED,
+    CHANNEL_ALIASES
+)
+
+DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, "GPS Fix", CH_GPS_SATS}
 
 
 class DataLog(object):
@@ -1130,35 +1139,11 @@ class DataLog(object):
             print("ERROR: VBO file missing 'time' column")
             return
 
-        mapping = {
-            "lat": ("GPS Latitude", "deg", 7, _parse_vbo_latlon),
-            "long": ("GPS Longitude", "deg", 7, _parse_vbo_latlon),
-            "velocity": ("Ground Speed", "km/h", 2, float),
-            "velocity-calc": ("Ground Speed", "km/h", 2, float),
-            "velocity-canbus": ("Vehicle Speed", "km/h", 2, float),
-            "heading": ("GPS Heading", "deg", 2, float),
-            "height": ("GPS Altitude", "m", 2, float),
-            "latacc": ("CG Accel Lateral", "G", 4, float),
-            "latacc-calc": ("CG Accel Lateral", "G", 4, float),
-            "longacc": ("CG Accel Longitudinal", "G", 4, float),
-            "longacc-calc": ("CG Accel Longitudinal", "G", 4, float),
-            "sats": ("GPS Satellites", "", 0, float),
-            "fix_type": ("GPS Fix", "", 0, float),
-            "steering_angle-canbus": ("Steering Angle", "deg", 2, float),
-            "brake_pos-canbus": ("Brake Pos", "%", 2, float),
-            "brake_pressure-canbus": ("Brake Press", "kPa", 2, float),
-            "rpm-canbus": ("Engine RPM", "rpm", 2, float),
-            "coolant_temp-canbus": ("Coolant Temp", "C", 2, float),
-            "engine_oil_temp-canbus": ("Engine Oil Temp", "C", 2, float),
-            "accelerator_pos-canbus": ("Throttle Pos", "%", 2, float),
-            "lean_angle-calc": ("Lean Angle", "deg", 2, float),
-            "combined_acc-calc": ("G Force Combined", "G", 4, float),
-        }
-
         col_idx_map = {}
         for idx, col_name in enumerate(cols_raw):
-            if col_name in mapping:
-                out_name, unit, dec, fn = mapping[col_name]
+            if col_name in CHANNEL_ALIASES:
+                out_name, unit, dec = CHANNEL_ALIASES[col_name]
+                fn = _parse_vbo_latlon if col_name in ("lat", "long") else float
                 if out_name not in self.channels:
                     self.add_channel(out_name, unit, float, dec)
                 col_idx_map[idx] = (out_name, fn)
