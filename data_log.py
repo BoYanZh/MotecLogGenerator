@@ -157,6 +157,7 @@ class DataLog(object):
         return beacons
 
     def calculate_math_channels(self):
+        self._derive_yaw_rate_from_gps_heading()
         self._derive_cg_accel_lateral()
         self._derive_cg_accel_longitudinal()
         self._derive_smoothed_accel()
