@@ -94,6 +94,8 @@ def _normalize_venue(name):
 
 
 def _auto_detect_log_type(file_path):
+    if file_path.lower().endswith(".ibt"):
+        return "IBT"
     if file_path.endswith(".rcz"):
         return "RCZ"
     try:
@@ -175,6 +177,9 @@ def _process_one(args, stint_override=None, output_override=None):
         print("Extracting RCZ data directly...")
         data_log.from_rcz_log(args.log, target_lap=args.lap,
                               target_stint=stint_arg, min_lap_sec=args.min_lap_sec)
+    elif active_type == "IBT":
+        print("Extracting iRacing .ibt telemetry...")
+        data_log.from_ibt_log(args.log)
 
     if not data_log.channels:
         print("ERROR: Failed to find any channels in log data")

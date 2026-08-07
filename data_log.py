@@ -1073,6 +1073,385 @@ class DataLog(object):
         for name in empty_channels:
             del self.channels[name]
 
+    def from_ibt_log(self, ibt_file_path):
+        """ Creates channels populated with messages from an iRacing native .ibt binary telemetry file.
+
+        The .ibt format consists of:
+          - irsdk_header (48 bytes): ver, status, tickRate, sessionInfoUpdate,
+            sessionInfoLen, sessionInfoOffset, numVars, varHeaderOffset,
+            numBuf, bufLen, + 2 pad ints
+          - irsdk_diskSubHeader (32 bytes at offset 48): sessionStartDate,
+            sessionStartTime, sessionEndTime, lapCount, recordCount
+          - irsdk_varHeader array (144 bytes each): type, offset, count,
+            countAsTime, name[32], desc[64], unit[32]
+          - YAML session info block (UTF-8, sessionInfoLen bytes)
+          - Data buffer: n_ticks * bufLen bytes, one tick row per sample
+
+        irsdk var types: 0=char, 1=bool, 2=int32, 3=uint32, 4=float32, 5=float64
+        Reference: https://sajax.github.io/irsdkdocs/
+        """
+        import struct as _struct
+
+        self.clear()
+        self.laps_info = {}
+
+        with open(ibt_file_path, "rb") as f:
+            raw_file = f.read()
+
+        if len(raw_file) < 112:
+            print("ERROR: .ibt file too small to be valid")
+            return
+
+        # --- 1. Parse irsdk_header (12 ints = 48 bytes) ---
+        # ver, status, tickRate, sessionInfoUpdate, sessionInfoLen, sessionInfoOffset,
+        # numVars, varHeaderOffset, numBuf, bufLen, pad[2]
+        (ver, status, tick_rate,
+         sess_info_update, sess_info_len, sess_info_offset,
+         num_vars, var_header_offset,
+         num_buf, buf_len, _pad0, _pad1) = _struct.unpack_from("12i", raw_file, 0)
+
+        # --- 2. Read bufInfo[0] (first data buffer descriptor, at byte 48) ---
+        # struct irsdk_bufInfo { int tickCount; int bufOffset; int pad[2]; }
+        # In .ibt disk files this is written at offset 48 directly after the 12-int header.
+        buf_tick_count, buf_offset = _struct.unpack_from("2i", raw_file, 48)
+
+        if buf_offset <= 0 or buf_offset >= len(raw_file):
+            print("ERROR: Invalid .ibt data buffer offset")
+            return
+
+        n_ticks = (len(raw_file) - buf_offset) // buf_len
+        if n_ticks <= 0:
+            print("ERROR: .ibt file has no data ticks")
+            return
+
+        dt = 1.0 / tick_rate
+
+        # --- 3. Parse YAML Session Info ---
+        sess_yaml = raw_file[sess_info_offset: sess_info_offset + sess_info_len].decode("latin-1", errors="ignore")
+
+        venue = ""
+        driver = ""
+        car = ""
+        weekend_date = ""
+        sess_dt = None
+
+        for line in sess_yaml.splitlines():
+            ls = line.strip()
+            if ls.startswith("TrackDisplayName:"):
+                venue = ls.split(":", 1)[1].strip()
+            elif ls.startswith("UserName:"):
+                driver = ls.split(":", 1)[1].strip()
+            elif ls.startswith("CarScreenName:"):
+                car = ls.split(":", 1)[1].strip()
+            elif ls.startswith("WeekendDate:"):
+                weekend_date = ls.split(":", 1)[1].strip()
+
+        # Parse session datetime from YAML WeekendDate field (e.g. "2026-08-07")
+        if weekend_date:
+            try:
+                import datetime as _dt
+                sess_dt = _dt.datetime.strptime(weekend_date, "%Y-%m-%d")
+            except Exception:
+                pass
+
+        self.metadata["venue_name"] = venue
+        self.metadata["driver"] = driver
+        self.metadata["vehicle_id"] = car
+        if sess_dt:
+            self.datetime = sess_dt
+
+        # --- 4. Parse irsdk_varHeader array ---
+        # Each varHeader: type(i), offset(i), count(i), countAsTime(i),
+        #                 name[32s], desc[64s], unit[32s]  => 4+4+4+4+32+64+32 = 144 bytes
+        _ibt_type_map = {0: np.int8, 1: np.int8, 2: np.int32, 3: np.uint32, 4: np.float32, 5: np.float64}
+
+        var_meta = {}  # name -> (numpy_dtype, byte_offset_in_tick, count)
+        for i in range(num_vars):
+            base = var_header_offset + i * 144
+            if base + 144 > len(raw_file):
+                break
+            vtype, voffset, vcount = _struct.unpack_from("3i", raw_file, base)
+            vname = raw_file[base + 16: base + 48].split(b"\x00")[0].decode("latin-1")
+            vunit = raw_file[base + 112: base + 144].split(b"\x00")[0].decode("latin-1")
+            dtype = _ibt_type_map.get(vtype, np.float32)
+            var_meta[vname] = (dtype, voffset, vcount, vunit)
+
+        raw_data = raw_file[buf_offset: buf_offset + n_ticks * buf_len]
+        times = [i * dt for i in range(n_ticks)]
+
+        def _extract(var_name):
+            """ Extract a channel as a numpy array using strided buffer access. """
+            if var_name not in var_meta:
+                return None, None
+            dtype, voff, vcount, vunit = var_meta[var_name]
+            try:
+                arr = np.ndarray((n_ticks,), dtype=dtype, buffer=raw_data,
+                                 offset=voff, strides=(buf_len,)).astype(np.float64)
+                return arr, vunit
+            except Exception:
+                return None, None
+
+        # --- 5. Map canonical channels ---
+
+        # Ground Speed: iRacing 'Speed' is in m/s
+        spd, _ = _extract("Speed")
+        if spd is not None:
+            self.add_channel(CH_GROUND_SPEED, "km/h", float, 2)
+            for t, v in zip(times, spd * 3.6):
+                self.channels[CH_GROUND_SPEED].messages.append(Message(t, float(v)))
+
+        # GPS Latitude / Longitude: iRacing 'Lat'/'Lon' are already WGS84 decimal degrees
+        lat, _ = _extract("Lat")
+        if lat is not None:
+            self.add_channel(CH_GPS_LATITUDE, "deg", float, 7)
+            for t, v in zip(times, lat):
+                self.channels[CH_GPS_LATITUDE].messages.append(Message(t, float(v)))
+
+        lon, _ = _extract("Lon")
+        if lon is not None:
+            self.add_channel(CH_GPS_LONGITUDE, "deg", float, 7)
+            for t, v in zip(times, lon):
+                self.channels[CH_GPS_LONGITUDE].messages.append(Message(t, float(v)))
+
+        alt, _ = _extract("Alt")
+        if alt is not None:
+            self.add_channel(CH_GPS_ALTITUDE, "m", float, 2)
+            for t, v in zip(times, alt):
+                self.channels[CH_GPS_ALTITUDE].messages.append(Message(t, float(v)))
+
+        # Lateral / Longitudinal acceleration: iRacing in m/s^2, convert to G
+        lat_acc, _ = _extract("LatAccel")
+        if lat_acc is not None:
+            self.add_channel(CH_CG_ACCEL_LAT, "G", float, 4)
+            for t, v in zip(times, lat_acc / 9.80665):
+                self.channels[CH_CG_ACCEL_LAT].messages.append(Message(t, float(v)))
+
+        lon_acc, _ = _extract("LongAccel")
+        if lon_acc is not None:
+            self.add_channel(CH_CG_ACCEL_LON, "G", float, 4)
+            for t, v in zip(times, lon_acc / 9.80665):
+                self.channels[CH_CG_ACCEL_LON].messages.append(Message(t, float(v)))
+
+        # Yaw rate: iRacing 'YawRate' in rad/s -> deg/s
+        yaw, _ = _extract("YawRate")
+        if yaw is not None:
+            self.add_channel(CH_YAW_RATE, "deg/s", float, 3)
+            for t, v in zip(times, np.degrees(yaw)):
+                self.channels[CH_YAW_RATE].messages.append(Message(t, float(v)))
+
+        # GPS Heading: iRacing 'YawNorth' in rad (0..2*PI) -> deg
+        yaw_north, _ = _extract("YawNorth")
+        if yaw_north is not None and yaw_north.max() > 0.0:
+            self.add_channel(CH_GPS_HEADING, "deg", float, 2)
+            for t, v in zip(times, np.degrees(yaw_north)):
+                self.channels[CH_GPS_HEADING].messages.append(Message(t, float(v)))
+
+        # Steering angle: iRacing 'SteeringWheelAngle' in rad -> deg
+        steer, _ = _extract("SteeringWheelAngle")
+        if steer is not None:
+            self.add_channel(CH_STEERING_ANGLE, "deg", float, 2)
+            for t, v in zip(times, np.degrees(steer)):
+                self.channels[CH_STEERING_ANGLE].messages.append(Message(t, float(v)))
+
+        # Throttle: iRacing 'Throttle' is 0..1 -> 0..100%
+        throttle, _ = _extract("Throttle")
+        if throttle is not None:
+            self.add_channel(CH_THROTTLE_POS, "%", float, 2)
+            for t, v in zip(times, throttle * 100.0):
+                self.channels[CH_THROTTLE_POS].messages.append(Message(t, float(v)))
+
+        # Brake: iRacing 'Brake' is 0..1 -> 0..100%
+        brake, _ = _extract("Brake")
+        if brake is not None:
+            self.add_channel(CH_BRAKE_POS, "%", float, 2)
+            for t, v in zip(times, brake * 100.0):
+                self.channels[CH_BRAKE_POS].messages.append(Message(t, float(v)))
+
+        # Engine RPM
+        rpm, _ = _extract("RPM")
+        if rpm is not None:
+            self.add_channel(CH_ENGINE_RPM, "rpm", float, 0)
+            for t, v in zip(times, rpm):
+                self.channels[CH_ENGINE_RPM].messages.append(Message(t, float(v)))
+
+        # Gear
+        gear, _ = _extract("Gear")
+        if gear is not None:
+            self.add_channel(CH_GEAR, "", float, 0)
+            for t, v in zip(times, gear):
+                self.channels[CH_GEAR].messages.append(Message(t, float(v)))
+
+        # Engine / powertrain channels
+        wtemp, _ = _extract("WaterTemp")
+        if wtemp is not None:
+            self.add_channel(CH_COOLANT_TEMP, "C", float, 2)
+            for t, v in zip(times, wtemp):
+                self.channels[CH_COOLANT_TEMP].messages.append(Message(t, float(v)))
+
+        otemp, _ = _extract("OilTemp")
+        if otemp is not None:
+            self.add_channel(CH_ENGINE_OIL_TEMP, "C", float, 2)
+            for t, v in zip(times, otemp):
+                self.channels[CH_ENGINE_OIL_TEMP].messages.append(Message(t, float(v)))
+
+        opress, _ = _extract("OilPress")
+        if opress is not None:
+            self.add_channel("Engine Oil Press", "kPa", float, 2)
+            for t, v in zip(times, opress * 100.0):
+                self.channels["Engine Oil Press"].messages.append(Message(t, float(v)))
+
+        mpress, _ = _extract("ManifoldPress")
+        if mpress is not None:
+            self.add_channel("Manifold Press", "kPa", float, 2)
+            for t, v in zip(times, mpress * 100.0):
+                self.channels["Manifold Press"].messages.append(Message(t, float(v)))
+
+        flev, _ = _extract("FuelLevel")
+        if flev is not None:
+            self.add_channel("Fuel Level", "l", float, 2)
+            for t, v in zip(times, flev):
+                self.channels["Fuel Level"].messages.append(Message(t, float(v)))
+
+        volt, _ = _extract("Voltage")
+        if volt is not None:
+            self.add_channel("Battery Voltage", "V", float, 2)
+            for t, v in zip(times, volt):
+                self.channels["Battery Voltage"].messages.append(Message(t, float(v)))
+
+        # Track / ambient temps
+        ttemp, _ = _extract("TrackTemp")
+        if ttemp is not None:
+            self.add_channel("Track Temp", "C", float, 2)
+            for t, v in zip(times, ttemp):
+                self.channels["Track Temp"].messages.append(Message(t, float(v)))
+
+        # Wheel speeds: iRacing LFspeed/RFspeed/LRspeed/RRspeed in m/s -> km/h
+        for ibt_name, ch_name in [
+            ("LFspeed", "Wheel Speed FL"), ("RFspeed", "Wheel Speed FR"),
+            ("LRspeed", "Wheel Speed RL"), ("RRspeed", "Wheel Speed RR"),
+        ]:
+            ws, _ = _extract(ibt_name)
+            if ws is not None:
+                self.add_channel(ch_name, "km/h", float, 2)
+                for t, v in zip(times, ws * 3.6):
+                    self.channels[ch_name].messages.append(Message(t, float(v)))
+
+        # Per-wheel brake line pressures (iRacing bar -> kPa)
+        for ibt_name, ch_name in [
+            ("LFbrakeLinePress", "Brake Press FL"),
+            ("RFbrakeLinePress", "Brake Press FR"),
+            ("LRbrakeLinePress", "Brake Press RL"),
+            ("RRbrakeLinePress", "Brake Press RR"),
+        ]:
+            bp_arr, _ = _extract(ibt_name)
+            if bp_arr is not None:
+                self.add_channel(ch_name, "kPa", float, 2)
+                for t, v in zip(times, bp_arr * 100.0):
+                    self.channels[ch_name].messages.append(Message(t, float(v)))
+
+        # Lap distance percentage (0..100%, resets at S/F line)
+        lap_dist_pct_arr, _ = _extract("LapDistPct")
+        if lap_dist_pct_arr is not None:
+            self.add_channel("Lap Distance", "%", float, 2)
+            for t, v in zip(times, lap_dist_pct_arr * 100.0):
+                self.channels["Lap Distance"].messages.append(Message(t, float(v)))
+
+        # --- 6. Lap detection: raw Lap counter transitions ---
+        # Every forward increment of the iRacing 'Lap' counter represents a
+        # real crossing of the S/F timing line (including quick-reset laps).
+        # Backward transitions (e.g. 16->0) are quick-reset drops and are
+        # automatically skipped because prev_lap only updates on a beacon hit.
+        lap_arr, _ = _extract("Lap")
+        self.add_channel(CH_LAP_NUMBER, "", float, 0)
+
+        if lap_arr is not None and len(lap_arr) > 1:
+            beacons = []
+            prev_lap = lap_arr[0]
+            for i in range(1, len(lap_arr)):
+                new_val = lap_arr[i]
+                if new_val > prev_lap and new_val > 0:
+                    beacons.append((times[i], f"Lap {int(new_val)}"))
+                    prev_lap = new_val
+
+            self.laps_info["beacons"] = beacons
+
+            # Build lap_number channel (0 before first S/F crossing, then 1,2,3...)
+            lap_nums = np.zeros(n_ticks, dtype=int)
+            label_counter = 0
+            prev_lap_val = lap_arr[0]
+            for i in range(1, n_ticks):
+                v = lap_arr[i]
+                if v > prev_lap_val and v > 0:
+                    label_counter += 1
+                    prev_lap_val = v
+                lap_nums[i] = label_counter
+
+            for i in range(n_ticks):
+                self.channels[CH_LAP_NUMBER].messages.append(Message(times[i], float(lap_nums[i])))
+
+            # Build laps_info structure (every segment between beacons is a lap)
+            lap_items = []
+            total_dur = times[-1] if len(times) > 0 else 0.0
+            fastest_lap = None
+            fastest_dur = float("inf")
+
+            if beacons:
+                first_t = beacons[0][0]
+                if first_t > 0:
+                    lap_items.append({
+                        "type": "Out Lap",
+                        "lap_label": "Out Lap",
+                        "lap_num": 1,
+                        "start_time": 0.0,
+                        "end_time": first_t,
+                        "duration": first_t,
+                        "stint": 0
+                    })
+
+                for ci in range(len(beacons) - 1):
+                    s_t = beacons[ci][0]
+                    e_t = beacons[ci + 1][0]
+                    dur = e_t - s_t
+                    lap_num = len(lap_items) + 1
+                    lap_items.append({
+                        "type": "Timed",
+                        "lap_label": str(lap_num),
+                        "lap_num": lap_num,
+                        "start_time": s_t,
+                        "end_time": e_t,
+                        "duration": dur,
+                        "stint": 0
+                    })
+                    if dur < fastest_dur:
+                        fastest_dur = dur
+                        fastest_lap = lap_num
+
+                last_t = beacons[-1][0]
+                remaining = total_dur - last_t
+                if remaining > 0:
+                    lap_num = len(lap_items) + 1
+                    lap_items.append({
+                        "type": "In Lap",
+                        "lap_label": "In Lap",
+                        "lap_num": lap_num,
+                        "start_time": last_t,
+                        "end_time": total_dur,
+                        "duration": remaining,
+                        "stint": 0
+                    })
+
+            self.laps_info["laps"] = lap_items
+            self.laps_info["total_laps"] = len(lap_items)
+            self.laps_info["fastest_lap"] = fastest_lap if fastest_lap is not None else 1
+            self.laps_info["fastest_time"] = fastest_dur if fastest_dur != float("inf") else 0.0
+        else:
+            self.channels[CH_LAP_NUMBER].messages = [Message(times[0], 1.0)]
+
+        # Cleanup empty channels
+        empty = [name for name, ch in self.channels.items() if not ch.messages]
+        for name in empty:
+            del self.channels[name]
+
     def from_vbo_log(self, log_lines, target_lap=None):
         """ Creates channels populated with messages from a Racelogic .vbo log file. """
         self.clear()

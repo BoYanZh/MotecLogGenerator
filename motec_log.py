@@ -144,12 +144,16 @@ class MotecLog(object):
                     split_beacons.append((b_time, b_name))
 
         if not lap_beacons:
-            laps = laps_info.get("laps", []) if laps_info and "laps" in laps_info else []
-            if len(laps) > 1:
-                for idx, lap in enumerate(laps[:-1]):
-                    end_t = lap.get("end_time", 0.0)
-                    if end_t > 1.0:
-                        lap_beacons.append((end_t, f"Manual.{idx + 1}"))
+            b_from_laps = laps_info.get("beacons", []) if laps_info else []
+            if b_from_laps:
+                lap_beacons = b_from_laps
+            else:
+                laps = laps_info.get("laps", []) if laps_info else []
+                if len(laps) > 1:
+                    for idx, lap in enumerate(laps[:-1]):
+                        end_t = lap.get("end_time", 0.0)
+                        if end_t > 1.0:
+                            lap_beacons.append((end_t, f"Manual.{idx + 1}"))
 
         for idx, (b_time, b_name) in enumerate(lap_beacons):
             t_us = b_time * 1e6
