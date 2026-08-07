@@ -253,15 +253,15 @@ class DataLog(object):
         if not all(r in self.channels for r in required):
             return
         vx_chan = self.channels["Ground Speed"]
-        n = len(vx_chan.messages)
+        n = min(len(self.channels[r].messages) for r in required)
         if n < 2:
             return
-        time = np.array([m.timestamp for m in vx_chan.messages])
-        vx = np.array([m.value for m in vx_chan.messages])
+        time = np.array([m.timestamp for m in vx_chan.messages[:n]])
+        vx = np.array([m.value for m in vx_chan.messages[:n]])
         if vx_chan.units == "km/h":
             vx /= 3.6
-        ay = np.array([m.value * 9.80665 for m in self.channels["CG Accel Lateral"].messages])
-        yaw_rate_degs = np.array([m.value for m in self.channels["Chassis Yaw Rate"].messages])
+        ay = np.array([m.value * 9.80665 for m in self.channels["CG Accel Lateral"].messages[:n]])
+        yaw_rate_degs = np.array([m.value for m in self.channels["Chassis Yaw Rate"].messages[:n]])
         yaw_rate = np.radians(yaw_rate_degs * -1.0)
 
         dt = np.zeros(n)
@@ -1067,6 +1067,118 @@ class DataLog(object):
         empty_channels = [name for name, ch in self.channels.items() if not ch.messages]
         for name in empty_channels:
             del self.channels[name]
+
+    def from_vbo_log(self, log_lines, target_lap=None):
+        """ Creates channels populated with messages from a Racelogic .vbo log file. """
+        self.clear()
+        self.laps_info = {}
+
+        if not log_lines:
+            return
+
+        def _parse_vbo_latlon(val_str):
+            sign = -1.0 if val_str.startswith("-") else 1.0
+            val_str = val_str.lstrip("+-")
+            dot_idx = val_str.find(".")
+            if dot_idx < 0:
+                return 0.0
+            deg_str = val_str[:dot_idx - 2]
+            min_str = val_str[dot_idx - 2:]
+            deg = float(deg_str) if deg_str else 0.0
+            minutes = float(min_str)
+            return sign * (deg + minutes / 60.0)
+
+        def _parse_vbo_time(val_str):
+            try:
+                t_float = float(val_str)
+                hh = int(t_float // 10000)
+                mm = int((t_float % 10000) // 100)
+                ss = t_float % 100
+                return hh * 3600.0 + mm * 60.0 + ss
+            except ValueError:
+                return 0.0
+
+        sections = {}
+        curr_sec = None
+        for line in log_lines:
+            line_s = line.strip()
+            if line_s.startswith("[") and line_s.endswith("]"):
+                curr_sec = line_s[1:-1]
+                sections[curr_sec] = []
+            elif curr_sec:
+                sections[curr_sec].append(line_s)
+
+        # Extract datetime from header line 1 (e.g. File created on 20/01/2026 at 07:31:48)
+        if log_lines and "File created on" in log_lines[0]:
+            parts = log_lines[0].strip().split()
+            if len(parts) >= 6:
+                d_str, t_str = parts[3], parts[5]
+                try:
+                    self.datetime = datetime.datetime.strptime(f"{d_str} {t_str}", "%d/%m/%Y %H:%M:%S")
+                except Exception:
+                    pass
+
+        cols_raw = sections.get("column names", [""])[0].split()
+        data_lines = [l for l in sections.get("data", []) if l]
+
+        if not cols_raw or not data_lines:
+            print("ERROR: Invalid VBO file, missing [column names] or [data] section")
+            return
+
+        time_idx = cols_raw.index("time") if "time" in cols_raw else -1
+        if time_idx < 0:
+            print("ERROR: VBO file missing 'time' column")
+            return
+
+        mapping = {
+            "lat": ("GPS Latitude", "deg", 7, _parse_vbo_latlon),
+            "long": ("GPS Longitude", "deg", 7, _parse_vbo_latlon),
+            "velocity": ("Ground Speed", "km/h", 2, float),
+            "velocity-calc": ("Ground Speed", "km/h", 2, float),
+            "velocity-canbus": ("Vehicle Speed", "km/h", 2, float),
+            "heading": ("GPS Heading", "deg", 2, float),
+            "height": ("GPS Altitude", "m", 2, float),
+            "latacc": ("CG Accel Lateral", "G", 4, float),
+            "latacc-calc": ("CG Accel Lateral", "G", 4, float),
+            "longacc": ("CG Accel Longitudinal", "G", 4, float),
+            "longacc-calc": ("CG Accel Longitudinal", "G", 4, float),
+            "sats": ("GPS Satellites", "", 0, float),
+            "fix_type": ("GPS Fix", "", 0, float),
+            "steering_angle-canbus": ("Steering Angle", "deg", 2, float),
+            "brake_pos-canbus": ("Brake Pos", "%", 2, float),
+            "brake_pressure-canbus": ("Brake Press", "kPa", 2, float),
+            "rpm-canbus": ("Engine RPM", "rpm", 2, float),
+            "coolant_temp-canbus": ("Coolant Temp", "C", 2, float),
+            "engine_oil_temp-canbus": ("Engine Oil Temp", "C", 2, float),
+            "accelerator_pos-canbus": ("Throttle Pos", "%", 2, float),
+            "lean_angle-calc": ("Lean Angle", "deg", 2, float),
+            "combined_acc-calc": ("G Force Combined", "G", 4, float),
+        }
+
+        col_idx_map = {}
+        for idx, col_name in enumerate(cols_raw):
+            if col_name in mapping:
+                out_name, unit, dec, fn = mapping[col_name]
+                if out_name not in self.channels:
+                    self.add_channel(out_name, unit, float, dec)
+                col_idx_map[idx] = (out_name, fn)
+
+        t0 = None
+        for line_s in data_lines:
+            parts = line_s.split()
+            if len(parts) >= len(cols_raw):
+                t_sec = _parse_vbo_time(parts[time_idx])
+                if t0 is None:
+                    t0 = t_sec
+                t_rel = t_sec - t0
+                if t_rel < 0:
+                    t_rel += 86400.0  # Handle midnight wrapping
+                for idx, (out_name, fn) in col_idx_map.items():
+                    try:
+                        v_val = fn(parts[idx])
+                        self.channels[out_name].messages.append(Message(t_rel, v_val))
+                    except ValueError:
+                        pass
 
     def from_pbbuddy_log(self, log_lines, target_lap=None):
         """ Creates channels populated with messages from a PB Buddy CSV log file. """

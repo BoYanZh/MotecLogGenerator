@@ -1,6 +1,6 @@
 # MotecLogGenerator
 
-A high-performance Python utility for generating MoTeC `.ld` / `.ldx` log files from external telemetry sources (RaceChrono, AiM Solo, RaceStudio, COBB Accessport, PB Buddy, CAN bus logs, and generic CSVs). 
+A high-performance Python utility for generating MoTeC `.ld` / `.ldx` log files from external telemetry sources (RaceChrono, AiM Solo, Racelogic VBOX, RaceStudio, COBB Accessport, PB Buddy, CAN bus logs, and generic CSVs). 
 
 Generated log files are **"Pro Enabled"**, allowing them to be opened natively in either *MoTeC i2 Standard* or *MoTeC i2 Pro* without licensing restrictions.
 
@@ -9,6 +9,7 @@ Generated log files are **"Pro Enabled"**, allowing them to be opened natively i
 ## Key Features
 
 * **Multi-Format Parsing**:
+  * **Racelogic VBOX `.vbo` Logs**: Parses NMEA latitude/longitude, velocity, 10Hz/20Hz/100Hz IMU accelerometers, gyroscopes, and CAN bus channels.
   * **RaceChrono Native `.rcz` Archives**: Direct binary unzipping, multi-stint auto-splitting, microsecond time-drift correction, and 20Hz/25Hz GPS.
   * **AiM Solo / RaceStudio CSVs**: Auto-maps `PPS`, `SteerAngle`, `BrakePress`, `RPM`, `Gear`, temperatures, and lap beacon markers.
   * **PB Buddy & Generic CSVs**: Auto-detects custom column names, speed units (`mph` $\to$ `km/h`), and heading angles.

@@ -99,6 +99,8 @@ def _auto_detect_log_type(file_path):
     try:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             sample = f.read(2048)
+        if file_path.lower().endswith(".vbo") or "[header]" in sample or "[column names]" in sample:
+            return "VBO"
         if "RaceChrono" in sample or "RaceStudio" in sample or "Solo" in sample or "GPS_LatAcc" in sample:
             return "RACECHRONO"
         if "Session ID" in sample or "Track ID" in sample or "PB Buddy" in sample:
@@ -164,6 +166,11 @@ def _process_one(args, stint_override=None, output_override=None):
             lines = file.readlines()
         print("Extracting PB Buddy data...")
         data_log.from_pbbuddy_log(lines, target_lap=args.lap)
+    elif active_type == "VBO":
+        with open(args.log, "r", encoding="utf-8", errors="ignore") as file:
+            lines = file.readlines()
+        print("Extracting Racelogic VBO data...")
+        data_log.from_vbo_log(lines, target_lap=args.lap)
     elif active_type == "RCZ":
         print("Extracting RCZ data directly...")
         data_log.from_rcz_log(args.log, target_lap=args.lap,
@@ -264,7 +271,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
     parser.add_argument("log", type=str, help="Path to logfile")
     parser.add_argument("log_type", type=str, help="Type of log to process",
-                        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO", "RCZ", "PBBUDDY", "AUTO"])
+                        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO", "RCZ", "PBBUDDY", "VBO", "AUTO"])
 
     parser.add_argument("--output", type=str,
                         help="Name of output file, defaults to the same filename as 'log'")
