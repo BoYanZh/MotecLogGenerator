@@ -24,9 +24,34 @@ from constants import (
 DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, "GPS Fix", CH_GPS_SATS}
 
 
+def _parse_vbo_latlon(val_str):
+    sign = -1.0 if val_str.startswith("-") else 1.0
+    val_str = val_str.lstrip("+-")
+    dot_idx = val_str.find(".")
+    if dot_idx < 0:
+        return 0.0
+    deg_str = val_str[:dot_idx - 2]
+    min_str = val_str[dot_idx - 2:]
+    deg = float(deg_str) if deg_str else 0.0
+    minutes = float(min_str)
+    return sign * (deg + minutes / 60.0)
+
+
+def _parse_vbo_time(val_str):
+    try:
+        t_float = float(val_str)
+        hh = int(t_float // 10000)
+        mm = int((t_float % 10000) // 100)
+        ss = t_float % 100
+        return hh * 3600.0 + mm * 60.0 + ss
+    except ValueError:
+        return 0.0
+
+
 class DataLog(object):
     channels: dict[str, Channel]
     """ Container for storing log data which contains a set of channels with time series data."""
+
     def __init__(self, name=""):
         self.name = name
         self.channels = {}
@@ -353,9 +378,6 @@ class DataLog(object):
         self.__calculate_rate("Steering Angle", "deg/s")
         self.__calculate_rate("Throttle Pos", "%/s")
         self.__calculate_rate("Brake Pos", "%/s")
-
-    def _mirror_gps_channels(self):
-        pass
 
     def _mirror_throttle_accel(self):
         if "Throttle Pos" not in self.channels and "Accelerator Pos" in self.channels:
@@ -1180,188 +1202,72 @@ class DataLog(object):
         times = [i * dt for i in range(n_ticks)]
 
         def _extract(var_name):
-            """ Extract a channel as a numpy array using strided buffer access. """
             if var_name not in var_meta:
-                return None, None
+                return None
             dtype, voff, vcount, vunit = var_meta[var_name]
             try:
-                arr = np.ndarray((n_ticks,), dtype=dtype, buffer=raw_data,
-                                 offset=voff, strides=(buf_len,)).astype(np.float64)
-                return arr, vunit
+                return np.ndarray((n_ticks,), dtype=dtype, buffer=raw_data,
+                                  offset=voff, strides=(buf_len,)).astype(np.float64)
             except Exception:
-                return None, None
+                return None
 
-        # --- 5. Map canonical channels ---
+        def _add_ch(ibt_name, ch_name, units, decimals, convert=None):
+            arr = _extract(ibt_name)
+            if arr is None:
+                return
+            if ibt_name == "YawNorth" and arr.max() <= 0.0:
+                return
+            self.add_channel(ch_name, units, float, decimals)
+            vals = convert(arr) if convert else arr
+            ch = self.channels[ch_name]
+            for i in range(n_ticks):
+                ch.messages.append(Message(times[i], float(vals[i])))
 
-        # Ground Speed: iRacing 'Speed' is in m/s
-        spd, _ = _extract("Speed")
-        if spd is not None:
-            self.add_channel(CH_GROUND_SPEED, "km/h", float, 2)
-            for t, v in zip(times, spd * 3.6):
-                self.channels[CH_GROUND_SPEED].messages.append(Message(t, float(v)))
+        _G = 9.80665
+        _ibt_map = [
+            ("Speed",              CH_GROUND_SPEED,     "km/h",    2, lambda x: x * 3.6),
+            ("Lat",                CH_GPS_LATITUDE,     "deg",     7, None),
+            ("Lon",                CH_GPS_LONGITUDE,    "deg",     7, None),
+            ("Alt",                CH_GPS_ALTITUDE,     "m",       2, None),
+            ("LatAccel",           CH_CG_ACCEL_LAT,     "G",       4, lambda x: x / _G),
+            ("LongAccel",          CH_CG_ACCEL_LON,     "G",       4, lambda x: x / _G),
+            ("YawRate",            CH_YAW_RATE,         "deg/s",   3, np.degrees),
+            ("YawNorth",           CH_GPS_HEADING,      "deg",     2, np.degrees),
+            ("SteeringWheelAngle", CH_STEERING_ANGLE,   "deg",     2, np.degrees),
+            ("Throttle",           CH_THROTTLE_POS,     "%",       2, lambda x: x * 100.0),
+            ("Brake",              CH_BRAKE_POS,        "%",       2, lambda x: x * 100.0),
+            ("RPM",                CH_ENGINE_RPM,       "rpm",     0, None),
+            ("Gear",               CH_GEAR,             "",        0, None),
+            ("WaterTemp",          CH_COOLANT_TEMP,     "C",       2, None),
+            ("OilTemp",            CH_ENGINE_OIL_TEMP,  "C",       2, None),
+            ("OilPress",           "Engine Oil Press",  "kPa",     2, lambda x: x * 100.0),
+            ("ManifoldPress",      "Manifold Press",    "kPa",     2, lambda x: x * 100.0),
+            ("FuelLevel",          "Fuel Level",        "l",       2, None),
+            ("Voltage",            "Battery Voltage",   "V",       2, None),
+            ("TrackTemp",          "Track Temp",        "C",       2, None),
+            ("LapDistPct",         "Lap Distance",      "%",       2, lambda x: x * 100.0),
+        ]
+        for ibt_name, ch_name, units, dec, conv in _ibt_map:
+            _add_ch(ibt_name, ch_name, units, dec, conv)
 
-        # GPS Latitude / Longitude: iRacing 'Lat'/'Lon' are already WGS84 decimal degrees
-        lat, _ = _extract("Lat")
-        if lat is not None:
-            self.add_channel(CH_GPS_LATITUDE, "deg", float, 7)
-            for t, v in zip(times, lat):
-                self.channels[CH_GPS_LATITUDE].messages.append(Message(t, float(v)))
-
-        lon, _ = _extract("Lon")
-        if lon is not None:
-            self.add_channel(CH_GPS_LONGITUDE, "deg", float, 7)
-            for t, v in zip(times, lon):
-                self.channels[CH_GPS_LONGITUDE].messages.append(Message(t, float(v)))
-
-        alt, _ = _extract("Alt")
-        if alt is not None:
-            self.add_channel(CH_GPS_ALTITUDE, "m", float, 2)
-            for t, v in zip(times, alt):
-                self.channels[CH_GPS_ALTITUDE].messages.append(Message(t, float(v)))
-
-        # Lateral / Longitudinal acceleration: iRacing in m/s^2, convert to G
-        lat_acc, _ = _extract("LatAccel")
-        if lat_acc is not None:
-            self.add_channel(CH_CG_ACCEL_LAT, "G", float, 4)
-            for t, v in zip(times, lat_acc / 9.80665):
-                self.channels[CH_CG_ACCEL_LAT].messages.append(Message(t, float(v)))
-
-        lon_acc, _ = _extract("LongAccel")
-        if lon_acc is not None:
-            self.add_channel(CH_CG_ACCEL_LON, "G", float, 4)
-            for t, v in zip(times, lon_acc / 9.80665):
-                self.channels[CH_CG_ACCEL_LON].messages.append(Message(t, float(v)))
-
-        # Yaw rate: iRacing 'YawRate' in rad/s -> deg/s
-        yaw, _ = _extract("YawRate")
-        if yaw is not None:
-            self.add_channel(CH_YAW_RATE, "deg/s", float, 3)
-            for t, v in zip(times, np.degrees(yaw)):
-                self.channels[CH_YAW_RATE].messages.append(Message(t, float(v)))
-
-        # GPS Heading: iRacing 'YawNorth' in rad (0..2*PI) -> deg
-        yaw_north, _ = _extract("YawNorth")
-        if yaw_north is not None and yaw_north.max() > 0.0:
-            self.add_channel(CH_GPS_HEADING, "deg", float, 2)
-            for t, v in zip(times, np.degrees(yaw_north)):
-                self.channels[CH_GPS_HEADING].messages.append(Message(t, float(v)))
-
-        # Steering angle: iRacing 'SteeringWheelAngle' in rad -> deg
-        steer, _ = _extract("SteeringWheelAngle")
-        if steer is not None:
-            self.add_channel(CH_STEERING_ANGLE, "deg", float, 2)
-            for t, v in zip(times, np.degrees(steer)):
-                self.channels[CH_STEERING_ANGLE].messages.append(Message(t, float(v)))
-
-        # Throttle: iRacing 'Throttle' is 0..1 -> 0..100%
-        throttle, _ = _extract("Throttle")
-        if throttle is not None:
-            self.add_channel(CH_THROTTLE_POS, "%", float, 2)
-            for t, v in zip(times, throttle * 100.0):
-                self.channels[CH_THROTTLE_POS].messages.append(Message(t, float(v)))
-
-        # Brake: iRacing 'Brake' is 0..1 -> 0..100%
-        brake, _ = _extract("Brake")
-        if brake is not None:
-            self.add_channel(CH_BRAKE_POS, "%", float, 2)
-            for t, v in zip(times, brake * 100.0):
-                self.channels[CH_BRAKE_POS].messages.append(Message(t, float(v)))
-
-        # Engine RPM
-        rpm, _ = _extract("RPM")
-        if rpm is not None:
-            self.add_channel(CH_ENGINE_RPM, "rpm", float, 0)
-            for t, v in zip(times, rpm):
-                self.channels[CH_ENGINE_RPM].messages.append(Message(t, float(v)))
-
-        # Gear
-        gear, _ = _extract("Gear")
-        if gear is not None:
-            self.add_channel(CH_GEAR, "", float, 0)
-            for t, v in zip(times, gear):
-                self.channels[CH_GEAR].messages.append(Message(t, float(v)))
-
-        # Engine / powertrain channels
-        wtemp, _ = _extract("WaterTemp")
-        if wtemp is not None:
-            self.add_channel(CH_COOLANT_TEMP, "C", float, 2)
-            for t, v in zip(times, wtemp):
-                self.channels[CH_COOLANT_TEMP].messages.append(Message(t, float(v)))
-
-        otemp, _ = _extract("OilTemp")
-        if otemp is not None:
-            self.add_channel(CH_ENGINE_OIL_TEMP, "C", float, 2)
-            for t, v in zip(times, otemp):
-                self.channels[CH_ENGINE_OIL_TEMP].messages.append(Message(t, float(v)))
-
-        opress, _ = _extract("OilPress")
-        if opress is not None:
-            self.add_channel("Engine Oil Press", "kPa", float, 2)
-            for t, v in zip(times, opress * 100.0):
-                self.channels["Engine Oil Press"].messages.append(Message(t, float(v)))
-
-        mpress, _ = _extract("ManifoldPress")
-        if mpress is not None:
-            self.add_channel("Manifold Press", "kPa", float, 2)
-            for t, v in zip(times, mpress * 100.0):
-                self.channels["Manifold Press"].messages.append(Message(t, float(v)))
-
-        flev, _ = _extract("FuelLevel")
-        if flev is not None:
-            self.add_channel("Fuel Level", "l", float, 2)
-            for t, v in zip(times, flev):
-                self.channels["Fuel Level"].messages.append(Message(t, float(v)))
-
-        volt, _ = _extract("Voltage")
-        if volt is not None:
-            self.add_channel("Battery Voltage", "V", float, 2)
-            for t, v in zip(times, volt):
-                self.channels["Battery Voltage"].messages.append(Message(t, float(v)))
-
-        # Track / ambient temps
-        ttemp, _ = _extract("TrackTemp")
-        if ttemp is not None:
-            self.add_channel("Track Temp", "C", float, 2)
-            for t, v in zip(times, ttemp):
-                self.channels["Track Temp"].messages.append(Message(t, float(v)))
-
-        # Wheel speeds: iRacing LFspeed/RFspeed/LRspeed/RRspeed in m/s -> km/h
         for ibt_name, ch_name in [
             ("LFspeed", "Wheel Speed FL"), ("RFspeed", "Wheel Speed FR"),
             ("LRspeed", "Wheel Speed RL"), ("RRspeed", "Wheel Speed RR"),
         ]:
-            ws, _ = _extract(ibt_name)
-            if ws is not None:
-                self.add_channel(ch_name, "km/h", float, 2)
-                for t, v in zip(times, ws * 3.6):
-                    self.channels[ch_name].messages.append(Message(t, float(v)))
+            _add_ch(ibt_name, ch_name, "km/h", 2, lambda x: x * 3.6)
 
-        # Per-wheel brake line pressures (iRacing bar -> kPa)
         for ibt_name, ch_name in [
-            ("LFbrakeLinePress", "Brake Press FL"),
-            ("RFbrakeLinePress", "Brake Press FR"),
-            ("LRbrakeLinePress", "Brake Press RL"),
-            ("RRbrakeLinePress", "Brake Press RR"),
+            ("LFbrakeLinePress", "Brake Press FL"), ("RFbrakeLinePress", "Brake Press FR"),
+            ("LRbrakeLinePress", "Brake Press RL"), ("RRbrakeLinePress", "Brake Press RR"),
         ]:
-            bp_arr, _ = _extract(ibt_name)
-            if bp_arr is not None:
-                self.add_channel(ch_name, "kPa", float, 2)
-                for t, v in zip(times, bp_arr * 100.0):
-                    self.channels[ch_name].messages.append(Message(t, float(v)))
-
-        # Lap distance percentage (0..100%, resets at S/F line)
-        lap_dist_pct_arr, _ = _extract("LapDistPct")
-        if lap_dist_pct_arr is not None:
-            self.add_channel("Lap Distance", "%", float, 2)
-            for t, v in zip(times, lap_dist_pct_arr * 100.0):
-                self.channels["Lap Distance"].messages.append(Message(t, float(v)))
+            _add_ch(ibt_name, ch_name, "kPa", 2, lambda x: x * 100.0)
 
         # --- 6. Lap detection: raw Lap counter transitions ---
         # Every forward increment of the iRacing 'Lap' counter represents a
         # real crossing of the S/F timing line (including quick-reset laps).
         # Backward transitions (e.g. 16->0) are quick-reset drops and are
         # automatically skipped because prev_lap only updates on a beacon hit.
-        lap_arr, _ = _extract("Lap")
+        lap_arr = _extract("Lap")
         self.add_channel(CH_LAP_NUMBER, "", float, 0)
 
         if lap_arr is not None and len(lap_arr) > 1:
@@ -1459,28 +1365,6 @@ class DataLog(object):
 
         if not log_lines:
             return
-
-        def _parse_vbo_latlon(val_str):
-            sign = -1.0 if val_str.startswith("-") else 1.0
-            val_str = val_str.lstrip("+-")
-            dot_idx = val_str.find(".")
-            if dot_idx < 0:
-                return 0.0
-            deg_str = val_str[:dot_idx - 2]
-            min_str = val_str[dot_idx - 2:]
-            deg = float(deg_str) if deg_str else 0.0
-            minutes = float(min_str)
-            return sign * (deg + minutes / 60.0)
-
-        def _parse_vbo_time(val_str):
-            try:
-                t_float = float(val_str)
-                hh = int(t_float // 10000)
-                mm = int((t_float % 10000) // 100)
-                ss = t_float % 100
-                return hh * 3600.0 + mm * 60.0 + ss
-            except ValueError:
-                return 0.0
 
         sections = {}
         curr_sec = None
