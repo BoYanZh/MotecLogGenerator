@@ -13,13 +13,10 @@ def _interp_zoh(times_target, times_src, values_src):
 
 
 from constants import (
-    CH_GPS_SATS, CH_GPS_FIX, CH_LAP_NUMBER, CH_GEAR,
-    CHANNEL_ALIASES,
+    CH_GPS_FIX, CH_LAP_NUMBER,
+    CHANNEL_ALIASES, DISCRETE_CHANNELS,
     IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP, IBT_BRAKE_PRESS_MAP,
 )
-
-DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, CH_GPS_FIX, CH_GPS_SATS}
-
 
 def _parse_vbo_latlon(val_str):
     sign = -1.0 if val_str.startswith("-") else 1.0

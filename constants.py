@@ -37,6 +37,8 @@ CH_SLIP_ANGLE_RR    = "Tire Slip Angle RR"
 CH_UNDERSTEER_INDEX = "Understeer Index"
 CH_G_COMBINED       = "G Force Combined"
 
+DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, CH_GPS_FIX, CH_GPS_SATS}
+
 # ----------------------------------------------------------------------------
 # Channel Alias Mappings: Raw header string -> (canonical_name, unit, dec)
 # ----------------------------------------------------------------------------
