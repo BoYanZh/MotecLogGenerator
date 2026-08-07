@@ -59,48 +59,20 @@ class MotecLog(object):
 
         log_channel: data_log.Channel
         """
-        # Advance the header data pointer
-        self.ld_header.data_ptr += self.CHANNEL_HEADER_SIZE
-
-        # Advance the data pointers of all previous channels
-        for ld_channel in self.ld_channels:
-            ld_channel.data_ptr += self.CHANNEL_HEADER_SIZE
-
-        # Determine our file pointers
-        if self.ld_channels:
-            meta_ptr = self.ld_channels[-1].next_meta_ptr
-            prev_meta_ptr = self.ld_channels[-1].meta_ptr
-            data_ptr = self.ld_channels[-1].data_ptr + self.ld_channels[-1]._data.nbytes
-        else:
-            # First channel needs the previous pointer zero'd out
-            meta_ptr = self.HEADER_PTR
-            prev_meta_ptr = 0
-            data_ptr = self.ld_header.data_ptr
-        next_meta_ptr = meta_ptr + self.CHANNEL_HEADER_SIZE
-
-        # Channel specs
         data_len = len(log_channel.messages)
         data_type = np.float32 if log_channel.data_type is float else np.int32
-        freq = int(log_channel.avg_frequency())
+        freq = int(round(log_channel.avg_frequency()))
         shift = 0
         multiplier = 1
         scale = 1
-
-        # Decimal places must be hard coded to zero, the ldparser library doesn't properly
-        # handle non zero values, consequently all channels will have zero decimal places
-        # decimals = log_channel.decimals
         decimals = 0
 
-        ld_channel = ldChan(None, meta_ptr, prev_meta_ptr, next_meta_ptr, data_ptr, data_len, \
+        ld_channel = ldChan(None, 0, 0, 0, 0, data_len, \
             data_type, freq, shift, multiplier, scale, decimals, log_channel.name, "", \
             log_channel.units)
 
         # Add in the channel data
-        ld_channel._data = np.array([], data_type)
-        for msg in log_channel.messages:
-            ld_channel._data = np.append(ld_channel._data, data_type(msg.value))
-
-        # Add the ld channel and advance the file pointers
+        ld_channel._data = np.array([data_type(msg.value) for msg in log_channel.messages], dtype=data_type)
         self.ld_channels.append(ld_channel)
 
     def add_all_channels(self, data_log):
@@ -111,11 +83,30 @@ class MotecLog(object):
         for channel_name, channel in data_log.channels.items():
             self.add_channel(channel)
 
+    def _finalize_pointers(self):
+        """ Calculates channel header pointers and data offsets using 124B CHANNEL_HEADER_SIZE steps. """
+        n = len(self.ld_channels)
+        if n == 0:
+            return
+
+        meta_base = self.HEADER_PTR
+        for i, ch in enumerate(self.ld_channels):
+            ch.meta_ptr = meta_base + i * self.CHANNEL_HEADER_SIZE
+            ch.prev_meta_ptr = meta_base + (i - 1) * self.CHANNEL_HEADER_SIZE if i > 0 else 0
+            ch.next_meta_ptr = meta_base + (i + 1) * self.CHANNEL_HEADER_SIZE if i < n - 1 else 0
+
+        data_ptr = meta_base + n * self.CHANNEL_HEADER_SIZE
+        self.ld_header.data_ptr = data_ptr
+        for ch in self.ld_channels:
+            ch.data_ptr = data_ptr
+            data_ptr += ch._data.nbytes
+
     def write(self, filename):
         """ Writes the motec log data to disc. """
         # Check for the presence of any channels, since the ldData write() method doesn't
         # gracefully handle zero channels
         if self.ld_channels:
+            self._finalize_pointers()
             ld_data = ldData(self.ld_header, self.ld_channels)
 
             # Need to zero out the final channel pointer
