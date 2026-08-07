@@ -43,14 +43,16 @@ from data_log import DataLog
 # ────────────────────────────────────────────────────────────────────────────
 CORNER_PRESETS = {
     "thunderhill_east_bypass": [
-        {"name": "T1 (Fast Left)",        "start_m":  122, "end_m":  450},
-        {"name": "T2 (Long Sweeper)",     "start_m":  450, "end_m":  858},
-        {"name": "T3 (Off-Camber)",       "start_m":  858, "end_m": 1250},
-        {"name": "T4/5 (Cyclone Hill)",   "start_m": 1250, "end_m": 1650},
-        {"name": "T6 (S-Turn Exit)",      "start_m": 1650, "end_m": 2000},
-        {"name": "T8 (Bypass Sweeper)",   "start_m": 2000, "end_m": 2444},
-        {"name": "T9 (Uphill Crest)",     "start_m": 2444, "end_m": 2800},
-        {"name": "T14/15 (Final Complex)","start_m": 2800, "end_m": 3100},
+        {"name": "Turn 1 (Fast Left)",        "start_m":  100, "end_m":  450},
+        {"name": "Turn 2 (Long Sweeper)",     "start_m":  450, "end_m":  858},
+        {"name": "Turn 3 (Off-Camber)",       "start_m":  858, "end_m": 1200},
+        {"name": "Turn 4/5 (Cyclone Hill)",   "start_m": 1200, "end_m": 1700},
+        {"name": "Turn 6/7 (S-Turn)",         "start_m": 1700, "end_m": 2000},
+        {"name": "Turn 8 (Bypass Sweeper)",   "start_m": 2000, "end_m": 2400},
+        {"name": "Turn 9 (Uphill Crest)",     "start_m": 2400, "end_m": 2800},
+        {"name": "Turn 10/11 (Chicane)",      "start_m": 2800, "end_m": 3400},
+        {"name": "Turn 14/15 (Final Corner)", "start_m": 3800, "end_m": 4200},
+        {"name": "Front Straight (Full WOT)", "start_m": 4200, "end_m": 4540},
     ],
 }
 DEFAULT_PRESET = "thunderhill_east_bypass"
