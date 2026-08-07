@@ -138,7 +138,7 @@ class MotecLog(object):
             for item in beacons:
                 b_time = item[0] if isinstance(item, (tuple, list)) else item
                 b_name = item[1] if isinstance(item, (tuple, list)) and len(item) > 1 else "Beacon"
-                if str(b_name).strip().lower() in ("start/finish", "start", "finish", "sf"):
+                if str(b_name).strip().lower() in ("start/finish", "start", "finish", "sf", "beacon") or str(b_name).strip().lower().startswith("lap"):
                     lap_beacons.append((b_time, b_name))
                 else:
                     split_beacons.append((b_time, b_name))

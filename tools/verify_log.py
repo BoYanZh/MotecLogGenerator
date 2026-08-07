@@ -85,7 +85,7 @@ def verify_motec_files(ld_path):
 
             beacons = []
             for elem in root.findall(".//Marker"):
-                val = elem.get("Value")
+                val = elem.get("Time") or elem.get("Value")
                 if val:
                     beacons.append(float(val))
 

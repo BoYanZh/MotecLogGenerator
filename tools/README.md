@@ -21,29 +21,29 @@ python tools/verify_log.py /path/to/generated_log.ld
 
 ---
 
-## 2. Assetto Corsa ACTI GPS Alignment Tool (`align_acti_gps.py`)
+## 2. Assetto Corsa ACTI Log Converter & GPS Alignment Tool (`convert_acti.py`)
 
-Aligns simulator telemetry logs from **ACTI (Assetto Corsa Telemetry Interface)** with real-world WGS84 GPS coordinates across any track, correcting 3D track coordinate offsets and North orientation mismatch for side-by-side overlay comparison in MoTeC i2 Pro.
+Converts and aligns simulator telemetry logs from **ACTI (Assetto Corsa Telemetry Interface)** with real-world WGS84 GPS coordinates across any track, correcting 3D track coordinate offsets and North orientation mismatch for side-by-side overlay comparison in MoTeC i2 Pro.
 
 ### Usage
 ```bash
 # Align a single ACTI .ld log or an entire directory of logs
-python tools/align_acti_gps.py /path/to/acti/logs --output_dir data/acti_aligned
+python tools/convert_acti.py /path/to/acti/logs --output_dir data/acti_aligned
 
 # Specify a track profile explicitly
-python tools/align_acti_gps.py /path/to/acti/logs --track thunderhill_east_bypass
+python tools/convert_acti.py /path/to/acti/logs --track thunderhill_east_bypass
 ```
 
 ### Auto-Calibration Mode (`--calibrate`)
-Automatically computes rotation angle $\theta$ and translation offsets $(dx, dy)$ for **any new Assetto Corsa track mod** by matching an ACTI simulator log against a real-world GPS log via ICP point-cloud optimization, saving the calibrated profile to [`acti_tracks.json`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/acti_tracks.json):
+Automatically computes rotation angle $\theta$ and translation offsets $(dx, dy)$ for **any new Assetto Corsa track mod** by matching an ACTI simulator log against a real-world GPS log via ICP point-cloud optimization, saving the calibrated profile to [`acti_track_gps.json`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/acti_track_gps.json):
 
 ```bash
 # Calibrate a new track profile (e.g. Laguna Seca or Sonoma)
-python tools/align_acti_gps.py --calibrate real_world_session.ld acti_sim_session.ld --track_key laguna_seca --track_name "Laguna Seca"
+python tools/convert_acti.py --calibrate real_world_session.ld acti_sim_session.ld --track_key laguna_seca --track_name "Laguna Seca"
 ```
 
 ### Features:
-* **Modular Track Config Profiles (`acti_tracks.json`)**: Pre-configured profiles for `thunderhill_east_bypass`, `thunderhill_ccw`, `laguna_seca`, `sonoma_raceway`, etc.
+* **Modular Track Config Profiles (`acti_track_gps.json`)**: Pre-configured profiles for `thunderhill_east_bypass`, `thunderhill_ccw`, `laguna_seca`, `sonoma_raceway`, etc.
 * **One-Command Auto Calibration**: Calculates `ref_lat`, `ref_lon`, `theta_deg`, `dx_m`, and `dy_m` with $<1.2\text{m}$ trajectory precision via Powell/ICP optimization.
 * **In-Place Metadata Preservation**: Retains 100% of original ACTI header metadata (date, time, vehicle model, session type, tire comments).
 * **Exact Lap & Sector Markers**: Copies original ACTI `.ldx` lap times and sector markers without false 0:00 out laps.
@@ -51,7 +51,25 @@ python tools/align_acti_gps.py --calibrate real_world_session.ld acti_sim_sessio
 
 ---
 
-## 3. Tire Grip Analysis Tool (`analyze_tire_grip.py`)
+## 3. iRacing Mu Log Converter (`convert_iracing_mu.py`)
+
+Converts 356-channel heavy iRacing Mu `.ld` logs into lightweight (~3-4MB) standardized MoTeC `.ld`/`.ldx` logs.
+
+### Usage
+```bash
+# Convert iRacing Mu .ld file
+python tools/convert_iracing_mu.py "data/iracing_mu/input.ld" --output "data/iracing_mu/clean.ld"
+```
+
+### Features:
+* **94%+ File Size Reduction**: Filters out 300+ internal iRacing rendering/network debug channels while preserving 100% of core vehicle dynamics.
+* **Strict Canonical Channel Names**: Enforces exact MoTeC canonical names (`Ground Speed`, `GPS Latitude`, `GPS Longitude`, `Brake Pos`, `Throttle Pos`, `Steering Angle`, `Engine RPM`, `Gear`, `Lap Number`).
+* **Auto Speed & GPS DMS Conversion**: Auto-scales `m/s` $\to$ `km/h` (* 3.6) and combines Degrees, Minutes, Seconds into single decimal degree float channels.
+* **Auto Lap Beacon Injection**: Auto-detects `Lap` channel transitions and generates companion `.ldx` lap beacons.
+
+---
+
+## 4. Tire Grip Analysis Tool (`analyze_tire_grip.py`)
 
 Compares lateral grip capabilities across exported MoTeC sessions:
 
@@ -69,17 +87,17 @@ python tools/analyze_tire_grip.py --dir data/exported --min_spd 60
 
 ---
 
-## 4. Lap Time & Telemetry Leaderboard Tool (`compare_laps.py`)
+## 5. Lap Time & Telemetry Leaderboard Tool (`analyze_lap_comparison.py`)
 
 Inspects exported MoTeC `.ld` / `.ldx` files across a directory and generates a sorted **Lap Time Leaderboard** with lap time deltas, fastest lap highlights ⭐, and sector split breakdowns.
 
 ### Usage
 ```bash
 # Analyze all exported .ld sessions and display leaderboard & lap breakdowns
-python tools/compare_laps.py --dir data/exported
+python tools/analyze_lap_comparison.py --dir data/exported
 
 # Only display the leaderboard (fastest lap per session)
-python tools/compare_laps.py --dir data/exported --fastest_only
+python tools/analyze_lap_comparison.py --dir data/exported --fastest_only
 ```
 
 ### Metrics & Features:

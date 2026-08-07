@@ -27,7 +27,7 @@ from ldparser.ldparser import ldData
 from data_log import DataLog, Message
 from motec_log import MotecLog
 
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acti_tracks.json")
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "acti_track_gps.json")
 
 
 def load_track_configs(config_path=None):

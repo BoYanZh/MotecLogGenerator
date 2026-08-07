@@ -358,10 +358,6 @@ class DataLog(object):
         pass
 
     def _mirror_throttle_accel(self):
-        if "Accelerator Pos" not in self.channels and "Throttle Pos" in self.channels:
-            src = self.channels["Throttle Pos"]
-            self.add_channel("Accelerator Pos", "%", float, 2)
-            self.channels["Accelerator Pos"].messages = [Message(m.timestamp, m.value) for m in src.messages]
         if "Throttle Pos" not in self.channels and "Accelerator Pos" in self.channels:
             src = self.channels["Accelerator Pos"]
             self.add_channel("Throttle Pos", "%", float, 2)

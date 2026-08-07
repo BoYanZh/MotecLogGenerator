@@ -102,7 +102,7 @@ Options:
 * **`motec_log.py`**: MoTeC binary `.ld` header packer and `.ldx` XML beacon generator.
 * **`ldparser/`**: Low-level MoTeC `.ld` binary file parser/writer module.
 * **`can_utils/`**: CAN bus helper utilities (`list_can_ids.py`).
-* **`tools/`**: Helper scripts & analysis tools (`verify_log.py`, `align_acti_gps.py`, `analyze_tire_grip.py`). See [`tools/README.md`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/README.md).
+* **`tools/`**: Helper scripts & analysis tools (`verify_log.py`, `convert_iracing_mu.py`, `convert_acti_log.py`, `analyze_tire_grip.py`, `analyze_lap_comparison.py`, `analyze_corner_time_loss.py`). See [`tools/README.md`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/README.md).
 * **`tests/`**: Unit test suite.
 * **`examples/`**: Sample telemetry logs and quickstart datasets.
 
@@ -113,10 +113,11 @@ Options:
 Standalone helper utilities are located in the [`tools/`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools) directory:
 
 1. **`python tools/verify_log.py <log.ld>`**: Validates MoTeC `.ld` header integrity, channel bounds, and `.ldx` XML beacon sorting.
-2. **`python tools/align_acti_gps.py <acti_log.ld>`**: Aligns Assetto Corsa ACTI simulator logs with real-world WGS84 GPS coordinates across any track via ICP point-cloud calibration.
-3. **`python tools/analyze_tire_grip.py --dir data/exported`**: Analyzes sustained 1s G-force grip metrics across MoTeC sessions.
-4. **`python tools/compare_laps.py --dir data/exported`**: Compares lap times, sector splits, and generates a ranked leaderboard across sessions.
-5. **`python tools/analyze_corner_time_loss.py <ref.ld> <target.ld>`**: Analyzes corner-by-corner time loss ($\Delta t$), apex minimum speeds ($V_{\min}$), and driver performance diagnostics.
+2. **`python tools/convert_iracing_mu.py <input_mu.ld>`**: Converts 356-channel heavy iRacing Mu `.ld` logs into lightweight (~3-4MB) standardized MoTeC `.ld`/`.ldx` logs with strict canonical channel names, `m/s` $\to$ `km/h` speed scaling, DMS GPS combination, and auto lap beacons.
+3. **`python tools/convert_acti.py <acti_log.ld>`**: Converts and aligns Assetto Corsa ACTI simulator `.ld` logs with real-world WGS84 GPS coordinates across any track via ICP point-cloud calibration (`tools/acti_track_gps.json`).
+4. **`python tools/analyze_tire_grip.py --dir data/exported`**: Analyzes sustained 1s G-force grip metrics across MoTeC sessions.
+5. **`python tools/analyze_lap_comparison.py --dir data/exported`**: Compares lap times, sector splits, and generates a ranked leaderboard across sessions.
+6. **`python tools/analyze_corner_time_loss.py <ref.ld> <target.ld>`**: Analyzes corner-by-corner time loss ($\Delta t$), apex minimum speeds ($V_{\min}$), and driver performance diagnostics.
 
 See [`tools/README.md`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/README.md) for detailed documentation.
 
