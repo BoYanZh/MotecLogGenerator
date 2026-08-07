@@ -86,3 +86,23 @@ python tools/compare_laps.py --dir data/exported --fastest_only
 * **Leaderboard Ranking**: Ranks sessions by fastest lap time with delta gap (s) relative to the overall session benchmark.
 * **Sector Split Breakdown**: Parses `.ldx` sector beacons (`S1`, `S2`, `S3`) to show split time progressions.
 * **Metadata Extraction**: Unpacks driver, vehicle, track venue, session date, and lap counts directly from MoTeC headers.
+
+---
+
+## 5. Corner-by-Corner Time Loss Analysis Tool (`analyze_corner_time_loss.py`)
+
+Calculates spatial distance-based time delta trace $dt(s)$ between a Target Lap and a Benchmark Reference Lap, analyzing **corner-by-corner time loss**, apex minimum speed ($V_{\min}$) differences, and primary loss diagnostics (e.g. over-braking, low apex speed, or late throttle application).
+
+### Usage
+```bash
+# Compare a target session against a benchmark reference session
+python tools/analyze_corner_time_loss.py benchmark_ref.ld target_session.ld
+
+# Batch compare all exported .ld sessions against the overall fastest lap
+python tools/analyze_corner_time_loss.py --dir data/exported
+```
+
+### Metrics & Diagnostics Evaluated:
+* **`Time Loss (s)`**: Net time gained or lost ($\Delta t$) within each specific corner segment.
+* **`Apex Speed (V_min)`**: Minimum cornering speed comparison in km/h ($V_{\min\text{,target}} - V_{\min\text{,ref}}$).
+* **`Primary Cause / Diagnostic`**: Diagnoses performance deficiencies per corner (`Low Apex Speed / Over-braking`, `Early Braking on Entry`, `Hesitant / Late Throttle Application`).
