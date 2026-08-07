@@ -177,8 +177,8 @@ def _process_one(args, stint_override=None, output_override=None):
     for channel_name, channel in data_log.channels.items():
         print("\t%s" % channel)
 
-    print("Calculating advanced math channels...")
-    data_log.calculate_math_channels()
+    print("Calculating advanced math channels (g-source: %s)..." % getattr(args, "g_source", "auto"))
+    data_log.calculate_math_channels(g_source=getattr(args, "g_source", "auto"))
 
     resample_freq = data_log.resample(args.frequency)
     print("Resampled channels at %.1f Hz..." % resample_freq)
@@ -268,6 +268,8 @@ if __name__ == '__main__':
 
     parser.add_argument("--output", type=str,
                         help="Name of output file, defaults to the same filename as 'log'")
+    parser.add_argument("--g-source", type=str, default="auto", choices=["auto", "sensor", "calc"],
+                        help="Source for G-force channels: 'auto' (use IMU sensor if present, fallback to GPS calc), 'sensor' (only IMU sensor), or 'calc' (force derive from GPS)")
     parser.add_argument("--frequency", type=str, default="auto",
                         help="Fixed frequency to resample all channels at (e.g. 20, 25, 50, 100 or 'auto', default: auto)")
     parser.add_argument("--gpx", action="store_true", help="Also generate GPX track file")

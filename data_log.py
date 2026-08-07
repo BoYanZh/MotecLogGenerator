@@ -156,10 +156,28 @@ class DataLog(object):
         beacons.sort(key=lambda x: x[0])
         return beacons
 
-    def calculate_math_channels(self):
+    def calculate_math_channels(self, g_source="auto"):
+        """
+        g_source: "auto" (default), "sensor", or "calc"
+          - "auto": Use raw IMU sensor G channels if present; otherwise derive from GPS.
+          - "sensor": Only use raw IMU sensor G channels. Do not derive G from GPS.
+          - "calc": Force deriving G channels from GPS Speed + Yaw Rate, overriding sensor channels.
+        """
         self._derive_yaw_rate_from_gps_heading()
-        self._derive_cg_accel_lateral()
-        self._derive_cg_accel_longitudinal()
+
+        if g_source == "calc":
+            if "CG Accel Lateral" in self.channels:
+                del self.channels["CG Accel Lateral"]
+            if "CG Accel Longitudinal" in self.channels:
+                del self.channels["CG Accel Longitudinal"]
+            self._derive_cg_accel_lateral(force=True)
+            self._derive_cg_accel_longitudinal(force=True)
+        elif g_source == "sensor":
+            pass
+        else:  # "auto"
+            self._derive_cg_accel_lateral(force=False)
+            self._derive_cg_accel_longitudinal(force=False)
+
         self._derive_smoothed_accel()
         self._calculate_kinematics()
         self._calculate_g_sum()
@@ -188,8 +206,8 @@ class DataLog(object):
                     Message(ch.messages[i].timestamp, float(smoothed[i])) for i in range(len(vals))
                 ]
 
-    def _derive_cg_accel_lateral(self):
-        if "CG Accel Lateral" in self.channels:
+    def _derive_cg_accel_lateral(self, force=False):
+        if not force and "CG Accel Lateral" in self.channels:
             return
         if "Ground Speed" not in self.channels or "Chassis Yaw Rate" not in self.channels:
             return
@@ -205,8 +223,8 @@ class DataLog(object):
         self.add_channel("CG Accel Lateral", "G", float, 2)
         self.channels["CG Accel Lateral"].messages = [Message(t_arr[i], ay[i]) for i in range(n)]
 
-    def _derive_cg_accel_longitudinal(self):
-        if "CG Accel Longitudinal" in self.channels:
+    def _derive_cg_accel_longitudinal(self, force=False):
+        if not force and "CG Accel Longitudinal" in self.channels:
             return
         if "Ground Speed" not in self.channels:
             return

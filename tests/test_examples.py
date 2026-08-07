@@ -58,6 +58,27 @@ def test_aim_solo_smoke():
     assert log.duration() > 0
 
 
+def test_g_source_modes():
+    # 1. Test 'calc' mode on AiM log: forces deriving G from GPS
+    log1 = DataLog()
+    log1.from_racechrono_log(_read_lines("aim_solo_sample.csv"))
+    log1.calculate_math_channels(g_source="calc")
+    assert "CG Accel Lateral" in log1.channels
+    assert "CG Accel Longitudinal" in log1.channels
+
+    # 2. Test 'sensor' mode on PB Buddy log (no raw sensor Gs): leaves G channels derived-free
+    log2 = DataLog()
+    log2.from_pbbuddy_log(_read_lines("pbbuddy_sample.csv"))
+    log2.calculate_math_channels(g_source="sensor")
+    assert "CG Accel Lateral" not in log2.channels
+
+    # 3. Test 'auto' mode on PB Buddy log: automatically derives Gs from GPS
+    log3 = DataLog()
+    log3.from_pbbuddy_log(_read_lines("pbbuddy_sample.csv"))
+    log3.calculate_math_channels(g_source="auto")
+    assert "CG Accel Lateral" in log3.channels
+
+
 def test_csv_resample_and_math():
     log = DataLog()
     log.from_csv_log(_read_lines("csv_sample.csv"))
