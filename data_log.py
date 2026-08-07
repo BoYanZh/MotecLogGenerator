@@ -1163,6 +1163,10 @@ class DataLog(object):
             "GPS Speed": ("Ground Speed", "km/h", 5),  # Convert m/s -> km/h
             "GPS Heading": ("GPS Heading", "deg", 3),
             "GPS Altitude": ("GPS Altitude", "m", 3),
+            # Lap count column — added by PB Buddy on request (Timur, 2026-08)
+            "Lap Count": ("Lap Number", "", 0),
+            "Lap": ("Lap Number", "", 0),
+            "Lap Number": ("Lap Number", "", 0),
         }
 
         chan_indices = {}
@@ -1175,24 +1179,6 @@ class DataLog(object):
                 unit = units[idx] if idx < len(units) else ""
                 self.add_channel(h, unit, float, 3)
                 chan_indices[idx] = (h, h)
-
-        # 4. Parse Data Rows
-        start_data_idx = data_header_idx + (2 if units else 1)
-        for line in log_lines[start_data_idx:]:
-            line_s = line.strip()
-            if not line_s or line_s.startswith("//") or line_s.startswith("#"):
-                continue
-            parts = line_s.split(",")
-            if len(parts) >= len(headers):
-                try:
-                    t = float(parts[0])
-                    for idx, (orig_name, out_name) in chan_indices.items():
-                        val = float(parts[idx])
-                        if orig_name == "GPS Speed":
-                            val = val * 3.6  # m/s -> km/h
-                        self.channels[out_name].messages.append(Message(t, val))
-                except ValueError:
-                    continue
 
         # 4. Parse Data Rows
         start_data_idx = data_header_idx + (2 if units else 1)
