@@ -1,5 +1,10 @@
 """
-iRacing Mu Telemetry Exporter Converter & Cleaner.
+iRacing Mu Telemetry Exporter Converter & Cleaner (Legacy).
+
+NOTE: For new iRacing telemetry, prefer the native .ibt parser in data_log.py.
+Use `python motec_log_generator.py session.ibt AUTO` for direct .ibt-to-MoTeC
+conversion without Mu Exporter. This tool remains for cleaning up existing
+Mu Exporter-generated .ld files.
 
 Converts 356-channel heavy iRacing Mu .ld files into standardized, lightweight
 MoTeC .ld / .ldx files with:
