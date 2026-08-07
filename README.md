@@ -147,6 +147,6 @@ This work was produced for research and track-day telemetry analysis purposes. I
 
 ## Acknowledgments & Credits
 
-* **[Timur's ft86 repo](https://github.com/timurrrr/ft86)**: Special thanks to Timur for reverse-engineering and documenting Toyota GR86 / Subaru BRZ CAN PIDs.
+* **[Timur's ft86 repo](https://github.com/timurrrr/ft86)**: Special thanks to Timur for reverse-engineering and documenting Toyota GR86 / Subaru BRZ CAN PIDs, as well as providing PB Buddy sample CSV logs for testing and validation.
 * **[ACTI (Assetto Corsa Telemetry Interface)](https://www.overtake.gg/downloads/acti-assetto-corsa-telemetry-interface.3948/)**: For establishing standard MoTeC telemetry structures for Assetto Corsa simulator logs.
 * **smashndash / Saurabh**: Special thanks for providing sample AiM Solo & RaceStudio telemetry log files for testing and validation.
