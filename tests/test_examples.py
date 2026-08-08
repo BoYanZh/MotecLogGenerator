@@ -267,6 +267,34 @@ def test_discrete_channels_use_zoh():
     assert any(0 < v < 100 for v in spd_vals), f"Speed not interpolated: {spd_vals}"
 
 
+def test_mask_interp_gaps_default():
+    log = DataLog()
+    log.add_channel("Ground Speed", "km/h", float, 2)
+    log.channels["Ground Speed"].messages = [
+        Message(0.0, 10.0),
+        Message(3.0, 40.0),
+    ]
+    log.resample(10, mask_interp_gaps=False)
+    vals = [m.value for m in log.channels["Ground Speed"].messages]
+    assert not any(np.isnan(v) for v in vals)
+    mid_idx = len(vals) // 2
+    assert 10.0 < vals[mid_idx] < 40.0
+
+
+def test_mask_interp_gaps_enabled():
+    log = DataLog()
+    log.add_channel("Ground Speed", "km/h", float, 2)
+    log.channels["Ground Speed"].messages = [
+        Message(0.0, 10.0),
+        Message(3.0, 40.0),
+    ]
+    log.resample(10, mask_interp_gaps=True)
+    vals = [m.value for m in log.channels["Ground Speed"].messages]
+    mid_idx = len(vals) // 2
+    assert np.isnan(vals[mid_idx])
+
+
+
 # ---------------------------------------------------------------------------
 # Empty channels guard
 # ---------------------------------------------------------------------------

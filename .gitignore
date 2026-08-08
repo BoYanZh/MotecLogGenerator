@@ -5,6 +5,5 @@ __pycache__
 *.ld
 *.ldx
 
+/tmp
 /data
-tire_map.json
-*.rcz

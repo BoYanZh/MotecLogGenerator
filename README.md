@@ -95,6 +95,7 @@ Options:
   --gpx                    Generate GPX track file (default: false)
   --kml                    Generate KML Google Earth track file (default: false)
   --min_lap_sec MIN_LAP    Minimum valid lap duration in seconds to filter noise (default: 15.0s)
+  --mask-interp-gaps       Mask sample interpolation gaps (>1s) with NaN instead of interpolating through them (default: false)
   --lap LAP                Specific lap number to export (e.g. 1, 15) or 'all' (default: all)
   --stint STINT            Specific RCZ stint to export or 'all' for auto-split (default: all)
   --driver DRIVER          Driver name metadata (auto-extracted from log if omitted)

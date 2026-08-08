@@ -176,7 +176,8 @@ def _process_one(args, stint_override=None, output_override=None):
     elif active_type == "RCZ":
         print("Extracting RCZ data directly...")
         data_log.from_rcz_log(args.log, target_lap=args.lap,
-                              target_stint=stint_arg, min_lap_sec=args.min_lap_sec)
+                              target_stint=stint_arg, min_lap_sec=args.min_lap_sec,
+                              mask_interp_gaps=args.mask_interp_gaps)
     elif active_type == "IBT":
         print("Extracting iRacing .ibt telemetry...")
         data_log.from_ibt_log(args.log)
@@ -193,7 +194,7 @@ def _process_one(args, stint_override=None, output_override=None):
     data_log.calculate_math_channels(g_source=getattr(args, "g_source", "auto"),
                                      kinematics=getattr(args, "kinematics", False))
 
-    resample_freq = data_log.resample(args.frequency)
+    resample_freq = data_log.resample(args.frequency, mask_interp_gaps=args.mask_interp_gaps)
     print("Resampled channels at %.1f Hz..." % resample_freq)
 
     print("Converting to MoTeC log...")
@@ -297,6 +298,8 @@ if __name__ == '__main__':
                         help="RCZ sessionResume stint to export")
     parser.add_argument("--min_lap_sec", type=float, default=15.0,
                         help="Minimum valid lap duration in seconds to filter noise (default: 15.0)")
+    parser.add_argument("--mask-interp-gaps", "--mask_interp_gaps", action="store_true", default=False, dest="mask_interp_gaps",
+                        help="Mask sample interpolation gaps (>1s) with NaN instead of interpolating through them (default: False)")
     parser.add_argument("--driver", type=str, default="", help="Motec log metadata field")
     parser.add_argument("--vehicle_id", type=str, default="", help="Motec log metadata field")
     parser.add_argument("--vehicle_weight", type=int, default=0, help="Motec log metadata field")

@@ -12,6 +12,25 @@ def _interp_zoh(times_target, times_src, values_src):
     return values_src[idx]
 
 
+def _mask_interp_gaps(values, times_target, times_src, gap_threshold_ms=1000.0):
+    """Set interpolated values to NaN where consecutive source samples are
+    separated by more than gap_threshold_ms (dropped frames / gap artifacts).
+    """
+    if len(times_src) < 2:
+        return values
+    gap_ms = np.diff(times_src) * 1000.0
+    gap_idx = np.where(gap_ms > gap_threshold_ms)[0]
+    if len(gap_idx) == 0:
+        return values
+    mask = np.zeros(len(values), dtype=bool)
+    for i in gap_idx:
+        t0, t1 = times_src[i], times_src[i + 1]
+        mask |= (times_target > t0) & (times_target < t1)
+    values = np.array(values, dtype=np.float64, copy=True)
+    values[mask] = np.nan
+    return values
+
+
 from constants import (
     CH_GPS_FIX, CH_LAP_NUMBER,
     CHANNEL_ALIASES, DISCRETE_CHANNELS,
@@ -120,23 +139,32 @@ class DataLog(object):
 
         return max(1.0, round(raw_freq, 1))
 
-    def resample(self, frequency="auto"):
+    def resample(self, frequency="auto", mask_interp_gaps=False):
         """ Resamples all channels such that all messages occur at a fixed frequency.
 
         frequency: float, int, or 'auto' (detects native sample rate, e.g. 20Hz, 25Hz, 50Hz).
+        mask_interp_gaps: bool, if True sets interpolated values across sample gaps (>1s) to NaN.
         Returns the frequency used for resampling.
         """
-        if isinstance(frequency, str) and frequency.lower() == "auto":
+        if isinstance(frequency, str):
+            if frequency.lower() == "auto":
+                frequency = self.detect_native_frequency()
+            else:
+                frequency = float(frequency)
+        elif frequency is None:
             frequency = self.detect_native_frequency()
-        elif frequency is None or (isinstance(frequency, (int, float)) and frequency <= 0):
-            frequency = self.detect_native_frequency()
+        elif isinstance(frequency, (int, float)):
+            if frequency <= 0:
+                frequency = self.detect_native_frequency()
+            else:
+                frequency = float(frequency)
         else:
-            frequency = float(frequency)
+            frequency = self.detect_native_frequency()
 
         start = self.start()
         end = self.end()
         for channel_name in self.channels:
-            self.channels[channel_name].resample(start, end, frequency)
+            self.channels[channel_name].resample(start, end, frequency, mask_interp_gaps=mask_interp_gaps)
         return frequency
 
     def detect_beacons(self, min_speed_kmh=30.0, min_time_sec=15.0):
@@ -1514,7 +1542,7 @@ class DataLog(object):
                 except ValueError:
                     continue
 
-    def from_rcz_log(self, rcz_file_path, target_lap=None, target_stint=None, min_lap_sec=15.0):
+    def from_rcz_log(self, rcz_file_path, target_lap=None, target_stint=None, min_lap_sec=15.0, mask_interp_gaps=False):
         """ Creates channels populated with messages directly from a RaceChrono .rcz archive.
 
         rcz_file_path: Path to the .rcz file
@@ -1853,6 +1881,8 @@ class DataLog(object):
                 if imu_t is not None and len(imu_t) == len(raw):
                     # Resample via timestamps - handles rate drift and small offsets
                     resampled = np.interp(times_sec, imu_t, raw)
+                    if mask_interp_gaps:
+                        resampled = _mask_interp_gaps(resampled, times_sec, imu_t)
                     populate_channel(out_name, units, resampled, decimals)
                 elif len(raw) >= n_samples:
                     # Fallback: naive truncation (off by  1 sample)
@@ -1922,6 +1952,8 @@ class DataLog(object):
                     values = _interp_zoh(times_sec, rel_times, raw_values)
                 else:
                     values = np.interp(times_sec, rel_times, raw_values)
+                    if mask_interp_gaps:
+                        values = _mask_interp_gaps(values, times_sec, rel_times)
                 if pid in rcz_pid_map:
                     ch_name, ch_unit, ch_scale, ch_offset = rcz_pid_map[pid]
                     if ch_name not in self.channels:
@@ -1988,6 +2020,8 @@ class DataLog(object):
                             interpolated = _interp_zoh(times_sec, rel_t, vals)
                         else:
                             interpolated = np.interp(times_sec, rel_t, vals)
+                            if mask_interp_gaps:
+                                interpolated = _mask_interp_gaps(interpolated, times_sec, rel_t)
                         processed = interpolated * ch_scale + ch_offset
                         if pid == "1004":
                             processed = np.round(processed).clip(-1, 6)
@@ -2069,7 +2103,7 @@ class Channel(object):
         else:
             return 0
 
-    def resample(self, start_time, end_time, frequency):
+    def resample(self, start_time, end_time, frequency, mask_interp_gaps=False):
         if not self.messages:
             return
 
@@ -2086,6 +2120,8 @@ class Channel(object):
             new_v = _interp_zoh(new_t, src_t, src_v)
         else:
             new_v = np.interp(new_t, src_t, src_v)
+            if mask_interp_gaps:
+                new_v = _mask_interp_gaps(new_v, new_t, src_t)
 
         self.messages = [Message(float(new_t[i]), float(new_v[i])) for i in range(num_msgs)]
 
