@@ -1,0 +1,3302 @@
+{
+ "accessport_sample.csv__from_accessport_log": {
+  "parse": {
+   "channels": {
+    "Accel Position (%)": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 100.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": "%"
+    },
+    "Baro Pressure (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      99.97
+     ],
+     "last": [
+      1352.76,
+      99.97
+     ],
+     "max": 99.97,
+     "min": 99.97,
+     "n": 18033,
+     "units": "kPa"
+    },
+    "Boost (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      -56.05
+     ],
+     "last": [
+      1352.76,
+      -64.81
+     ],
+     "max": 95.35,
+     "min": -76.95,
+     "n": 18033,
+     "units": "kPa"
+    },
+    "Coolant Temp (C)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      87.0
+     ],
+     "last": [
+      1352.76,
+      86.0
+     ],
+     "max": 95.0,
+     "min": 84.0,
+     "n": 18033,
+     "units": "C"
+    },
+    "Fuel Press Final (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": "kPa"
+    },
+    "Fuel Press Raw (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": "kPa"
+    },
+    "Gear Position (Gear)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 6.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": "Gear"
+    },
+    "Intake Temp (C)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      56.0
+     ],
+     "last": [
+      1352.76,
+      40.0
+     ],
+     "max": 62.0,
+     "min": 32.0,
+     "n": 18033,
+     "units": "C"
+    },
+    "Man Abs Press (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      43.71
+     ],
+     "last": [
+      1352.76,
+      35.3
+     ],
+     "max": 195.6,
+     "min": 22.96,
+     "n": 18033,
+     "units": "kPa"
+    },
+    "RPM (RPM)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      770.0
+     ],
+     "last": [
+      1352.76,
+      736.0
+     ],
+     "max": 5916.0,
+     "min": 652.0,
+     "n": 18033,
+     "units": "RPM"
+    },
+    "Req Torque (Nm)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 350.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": "Nm"
+    },
+    "Target Throttle (%)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 100.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": "%"
+    },
+    "Throttle Pos (%)": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      3.9
+     ],
+     "last": [
+      1352.76,
+      2.7
+     ],
+     "max": 100.0,
+     "min": 2.4,
+     "n": 18033,
+     "units": "%"
+    },
+    "Vehicle Speed (kph)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 138.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": "kph"
+    },
+    "Wastegate Duty (%)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 40.39,
+     "min": 0.0,
+     "n": 18033,
+     "units": "%"
+    }
+   },
+   "datetime": null,
+   "duration": 1352.76,
+   "laps_info": null,
+   "metadata": {},
+   "traps": []
+  },
+  "processed": {
+   "channels": {
+    "Accel Position (%)": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 100.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": "%"
+    },
+    "Baro Pressure (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      99.97
+     ],
+     "last": [
+      1352.6315789473683,
+      99.97
+     ],
+     "max": 99.97,
+     "min": 99.97,
+     "n": 17991,
+     "units": "kPa"
+    },
+    "Boost (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      -56.05
+     ],
+     "last": [
+      1352.6315789473683,
+      -65.21151913875623
+     ],
+     "max": 95.3209537000396,
+     "min": -76.80757381258007,
+     "n": 17991,
+     "units": "kPa"
+    },
+    "Coolant Temp (C)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      87.0
+     ],
+     "last": [
+      1352.6315789473683,
+      86.0
+     ],
+     "max": 95.0,
+     "min": 84.0,
+     "n": 17991,
+     "units": "C"
+    },
+    "Fuel Press Final (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": "kPa"
+    },
+    "Fuel Press Raw (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": "kPa"
+    },
+    "Gear Position (Gear)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 6.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": "Gear"
+    },
+    "Intake Temp (C)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      56.0
+     ],
+     "last": [
+      1352.6315789473683,
+      40.0
+     ],
+     "max": 62.0,
+     "min": 32.0,
+     "n": 17991,
+     "units": "C"
+    },
+    "Man Abs Press (kPa)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      43.71
+     ],
+     "last": [
+      1352.6315789473683,
+      34.91882775119586
+     ],
+     "max": 195.54924812030077,
+     "min": 22.97259210526316,
+     "n": 17991,
+     "units": "kPa"
+    },
+    "RPM (RPM)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      770.0
+     ],
+     "last": [
+      1352.6315789473683,
+      751.2212918660406
+     ],
+     "max": 5868.789727126803,
+     "min": 654.3196504775464,
+     "n": 17991,
+     "units": "RPM"
+    },
+    "Req Torque (Nm)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 350.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": "Nm"
+    },
+    "Target Throttle (%)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 100.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": "%"
+    },
+    "Throttle Pos (%)": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      3.9
+     ],
+     "last": [
+      1352.6315789473683,
+      2.7
+     ],
+     "max": 100.0,
+     "min": 2.4,
+     "n": 17991,
+     "units": "%"
+    },
+    "Vehicle Speed (kph)": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 138.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": "kph"
+    },
+    "Wastegate Duty (%)": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 40.39,
+     "min": 0.0,
+     "n": 17991,
+     "units": "%"
+    }
+   },
+   "datetime": null,
+   "duration": 1352.6315789473683,
+   "laps_info": null,
+   "metadata": {},
+   "traps": []
+  }
+ },
+ "aim_solo_sample.csv__from_racechrono_log": {
+  "parse": {
+   "channels": {
+    "CG Accel Lateral": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.4,
+      0.0
+     ],
+     "max": 0.2,
+     "min": 0.0,
+     "n": 11,
+     "units": "G"
+    },
+    "CG Accel Longitudinal": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.4,
+      0.0
+     ],
+     "max": 0.42,
+     "min": 0.0,
+     "n": 11,
+     "units": "G"
+    },
+    "Chassis Yaw Rate": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.4,
+      -2.0
+     ],
+     "max": 0.0,
+     "min": -132.75,
+     "n": 11,
+     "units": "deg/s"
+    },
+    "GPS Altitude": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      120.0
+     ],
+     "last": [
+      0.4,
+      121.0
+     ],
+     "max": 121.0,
+     "min": 120.0,
+     "n": 11,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.4,
+      13.5
+     ],
+     "max": 13.5,
+     "min": 0.0,
+     "n": 11,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      36.5841
+     ],
+     "last": [
+      0.4,
+      36.584155
+     ],
+     "max": 36.584155,
+     "min": 36.5841,
+     "n": 11,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      -121.7535
+     ],
+     "last": [
+      0.4,
+      -121.753555
+     ],
+     "max": -121.7535,
+     "min": -121.753555,
+     "n": 11,
+     "units": "deg"
+    },
+    "Ground Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.4,
+      148.05928
+     ],
+     "max": 148.05928,
+     "min": 0.0,
+     "n": 11,
+     "units": "km/h"
+    }
+   },
+   "datetime": "2026-02-14T14:30:00",
+   "duration": 0.4,
+   "laps_info": {
+    "fastest_lap": 1,
+    "fastest_time": 0.0,
+    "laps": [
+     {
+      "duration": 0.4,
+      "end_time": 0.4,
+      "lap_label": "1",
+      "lap_num": 1,
+      "start_time": 0.0,
+      "stint": 0,
+      "type": "Timed"
+     }
+    ],
+    "total_laps": 1
+   },
+   "metadata": {
+    "driver": "Driver",
+    "vehicle_id": "Track Car",
+    "venue_name": "Laguna Seca",
+    "yaw_rate_source": "gps_heading_derivative"
+   },
+   "traps": []
+  },
+  "processed": {
+   "channels": {
+    "CG Accel Lateral": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.36,
+      0.02
+     ],
+     "max": 0.2,
+     "min": 0.0,
+     "n": 10,
+     "units": "G"
+    },
+    "CG Accel Lateral Smooth": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.06153846153846154
+     ],
+     "last": [
+      0.36,
+      0.06923076923076923
+     ],
+     "max": 0.08076923076923077,
+     "min": 0.06153846153846154,
+     "n": 10,
+     "units": "G"
+    },
+    "CG Accel Long Smooth": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.1523076923076923
+     ],
+     "last": [
+      0.36,
+      0.16538461538461538
+     ],
+     "max": 0.1984615384615385,
+     "min": 0.1523076923076923,
+     "n": 10,
+     "units": "G"
+    },
+    "CG Accel Longitudinal": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.36,
+      0.1
+     ],
+     "max": 0.42,
+     "min": 0.0,
+     "n": 10,
+     "units": "G"
+    },
+    "Chassis Yaw Rate": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.36,
+      -3.75
+     ],
+     "max": 0.0,
+     "min": -132.75,
+     "n": 10,
+     "units": "deg/s"
+    },
+    "G Force Combined": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.36,
+      0.10198039027185571
+     ],
+     "max": 0.4569463863518345,
+     "min": 0.0,
+     "n": 10,
+     "units": "G"
+    },
+    "GPS Altitude": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      120.0
+     ],
+     "last": [
+      0.36,
+      120.9
+     ],
+     "max": 120.9,
+     "min": 120.0,
+     "n": 10,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.36,
+      13.5
+     ],
+     "max": 13.5,
+     "min": 0.0,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      36.5841
+     ],
+     "last": [
+      0.36,
+      36.584145
+     ],
+     "max": 36.584145,
+     "min": 36.5841,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      -121.7535
+     ],
+     "last": [
+      0.36,
+      -121.753545
+     ],
+     "max": -121.7535,
+     "min": -121.753545,
+     "n": 10,
+     "units": "deg"
+    },
+    "Ground Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.36,
+      143.71406199999998
+     ],
+     "max": 143.71406199999998,
+     "min": 0.0,
+     "n": 10,
+     "units": "km/h"
+    }
+   },
+   "datetime": "2026-02-14T14:30:00",
+   "duration": 0.36,
+   "laps_info": {
+    "fastest_lap": 1,
+    "fastest_time": 0.0,
+    "laps": [
+     {
+      "duration": 0.4,
+      "end_time": 0.4,
+      "lap_label": "1",
+      "lap_num": 1,
+      "start_time": 0.0,
+      "stint": 0,
+      "type": "Timed"
+     }
+    ],
+    "total_laps": 1
+   },
+   "metadata": {
+    "driver": "Driver",
+    "vehicle_id": "Track Car",
+    "venue_name": "Laguna Seca",
+    "yaw_rate_source": "gps_heading_derivative"
+   },
+   "traps": []
+  }
+ },
+ "csv_sample.csv__from_csv_log": {
+  "parse": {
+   "channels": {
+    "Accel Position": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 100.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": ""
+    },
+    "Boost": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      -56.05
+     ],
+     "last": [
+      1352.76,
+      -64.81
+     ],
+     "max": 95.35,
+     "min": -76.95,
+     "n": 18033,
+     "units": ""
+    },
+    "Coolant Temp": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      87.0
+     ],
+     "last": [
+      1352.76,
+      86.0
+     ],
+     "max": 95.0,
+     "min": 84.0,
+     "n": 18033,
+     "units": ""
+    },
+    "Gear Position": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 6.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": ""
+    },
+    "Intake Temp": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      56.0
+     ],
+     "last": [
+      1352.76,
+      40.0
+     ],
+     "max": 62.0,
+     "min": 32.0,
+     "n": 18033,
+     "units": ""
+    },
+    "Man Abs Press": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      43.71
+     ],
+     "last": [
+      1352.76,
+      35.3
+     ],
+     "max": 195.6,
+     "min": 22.96,
+     "n": 18033,
+     "units": ""
+    },
+    "RPM": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      770.0
+     ],
+     "last": [
+      1352.76,
+      736.0
+     ],
+     "max": 5916.0,
+     "min": 652.0,
+     "n": 18033,
+     "units": ""
+    },
+    "Req Torque": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 350.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": ""
+    },
+    "Vehicle Speed": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.76,
+      0.0
+     ],
+     "max": 138.0,
+     "min": 0.0,
+     "n": 18033,
+     "units": ""
+    }
+   },
+   "datetime": null,
+   "duration": 1352.76,
+   "laps_info": null,
+   "metadata": {},
+   "traps": []
+  },
+  "processed": {
+   "channels": {
+    "Accel Position": {
+     "decimals": 1,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 100.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": ""
+    },
+    "Boost": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      -56.05
+     ],
+     "last": [
+      1352.6315789473683,
+      -65.21151913875623
+     ],
+     "max": 95.3209537000396,
+     "min": -76.80757381258007,
+     "n": 17991,
+     "units": ""
+    },
+    "Coolant Temp": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      87.0
+     ],
+     "last": [
+      1352.6315789473683,
+      86.0
+     ],
+     "max": 95.0,
+     "min": 84.0,
+     "n": 17991,
+     "units": ""
+    },
+    "Gear Position": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 6.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": ""
+    },
+    "Intake Temp": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      56.0
+     ],
+     "last": [
+      1352.6315789473683,
+      40.0
+     ],
+     "max": 62.0,
+     "min": 32.0,
+     "n": 17991,
+     "units": ""
+    },
+    "Man Abs Press": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      43.71
+     ],
+     "last": [
+      1352.6315789473683,
+      34.91882775119586
+     ],
+     "max": 195.54924812030077,
+     "min": 22.97259210526316,
+     "n": 17991,
+     "units": ""
+    },
+    "RPM": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      770.0
+     ],
+     "last": [
+      1352.6315789473683,
+      751.2212918660406
+     ],
+     "max": 5868.789727126803,
+     "min": 654.3196504775464,
+     "n": 17991,
+     "units": ""
+    },
+    "Req Torque": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 350.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": ""
+    },
+    "Vehicle Speed": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      1352.6315789473683,
+      0.0
+     ],
+     "max": 138.0,
+     "min": 0.0,
+     "n": 17991,
+     "units": ""
+    }
+   },
+   "datetime": null,
+   "duration": 1352.6315789473683,
+   "laps_info": null,
+   "metadata": {},
+   "traps": []
+  }
+ },
+ "ibt_sample.ibt__from_ibt_log": {
+  "parse": {
+   "channels": {
+    "Ground Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.9,
+      162.0
+     ],
+     "max": 162.0,
+     "min": 0.0,
+     "n": 10,
+     "units": "km/h"
+    },
+    "Lap Number": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.9,
+      1.0
+     ],
+     "max": 1.0,
+     "min": 0.0,
+     "n": 10,
+     "units": ""
+    }
+   },
+   "datetime": "2026-01-01T00:00:00",
+   "duration": 0.9,
+   "laps_info": {
+    "beacons": [
+     [
+      0.5,
+      "Lap 1"
+     ]
+    ],
+    "fastest_lap": 1,
+    "fastest_time": 0.0,
+    "laps": [
+     {
+      "duration": 0.5,
+      "end_time": 0.5,
+      "lap_label": "Out Lap",
+      "lap_num": 1,
+      "start_time": 0.0,
+      "stint": 0,
+      "type": "Out Lap"
+     },
+     {
+      "duration": 0.4,
+      "end_time": 0.9,
+      "lap_label": "In Lap",
+      "lap_num": 2,
+      "start_time": 0.5,
+      "stint": 0,
+      "type": "In Lap"
+     }
+    ],
+    "total_laps": 2
+   },
+   "metadata": {
+    "driver": "Test Driver",
+    "vehicle_id": "Test Car",
+    "venue_name": "Test Track"
+   },
+   "traps": []
+  },
+  "processed": {
+   "channels": {
+    "CG Accel Long Smooth": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      5.0985810648896415
+     ],
+     "last": [
+      0.7207207207207208,
+      5.0985810648896415
+     ],
+     "max": 5.0985810648896415,
+     "min": 5.098581064889641,
+     "n": 9,
+     "units": "G"
+    },
+    "CG Accel Longitudinal": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      5.0985810648896415
+     ],
+     "last": [
+      0.7207207207207208,
+      5.098581064889642
+     ],
+     "max": 5.098581064889642,
+     "min": 5.098581064889639,
+     "n": 9,
+     "units": "G"
+    },
+    "Ground Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.7207207207207208,
+      129.72972972972974
+     ],
+     "max": 129.72972972972974,
+     "min": 0.0,
+     "n": 9,
+     "units": "km/h"
+    },
+    "Lap Number": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      0.7207207207207208,
+      1.0
+     ],
+     "max": 1.0,
+     "min": 0.0,
+     "n": 9,
+     "units": ""
+    }
+   },
+   "datetime": "2026-01-01T00:00:00",
+   "duration": 0.7207207207207208,
+   "laps_info": {
+    "beacons": [
+     [
+      0.5,
+      "Lap 1"
+     ]
+    ],
+    "fastest_lap": 1,
+    "fastest_time": 0.0,
+    "laps": [
+     {
+      "duration": 0.5,
+      "end_time": 0.5,
+      "lap_label": "Out Lap",
+      "lap_num": 1,
+      "start_time": 0.0,
+      "stint": 0,
+      "type": "Out Lap"
+     },
+     {
+      "duration": 0.4,
+      "end_time": 0.9,
+      "lap_label": "In Lap",
+      "lap_num": 2,
+      "start_time": 0.5,
+      "stint": 0,
+      "type": "In Lap"
+     }
+    ],
+    "total_laps": 2
+   },
+   "metadata": {
+    "driver": "Test Driver",
+    "vehicle_id": "Test Car",
+    "venue_name": "Test Track"
+   },
+   "traps": []
+  }
+ },
+ "pbbuddy_sample.csv__from_pbbuddy_log": {
+  "parse": {
+   "channels": {
+    "GPS Altitude": {
+     "decimals": 3,
+     "first": [
+      0.24,
+      57.86
+     ],
+     "last": [
+      1.0,
+      57.96
+     ],
+     "max": 57.96,
+     "min": 57.86,
+     "n": 20,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 3,
+     "first": [
+      0.24,
+      0.0
+     ],
+     "last": [
+      1.0,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 20,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      39.5400992
+     ],
+     "last": [
+      1.0,
+      39.5400994
+     ],
+     "max": 39.5400995,
+     "min": 39.5400992,
+     "n": 20,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      -122.331463
+     ],
+     "last": [
+      1.0,
+      -122.3314634
+     ],
+     "max": -122.331463,
+     "min": -122.3314634,
+     "n": 20,
+     "units": "deg"
+    },
+    "Ground Speed": {
+     "decimals": 5,
+     "first": [
+      0.24,
+      0.036000000000000004
+     ],
+     "last": [
+      1.0,
+      0.0
+     ],
+     "max": 0.14400000000000002,
+     "min": 0.0,
+     "n": 20,
+     "units": "km/h"
+    },
+    "Time": {
+     "decimals": 3,
+     "first": [
+      0.24,
+      0.24
+     ],
+     "last": [
+      1.0,
+      1.0
+     ],
+     "max": 1.0,
+     "min": 0.24,
+     "n": 20,
+     "units": "s"
+    }
+   },
+   "datetime": "2026-02-14T14:21:26",
+   "duration": 0.76,
+   "laps_info": {},
+   "metadata": {
+    "Comment": "The values for Date and Time are provided in UTC.",
+    "Date": "2/14/26",
+    "Session ID": "258c8ec0-af77-4ca4-8a16-0f2177103937",
+    "Session name": "Session 3",
+    "Session start date, local timezone, YYYYMMDD": "20260214",
+    "Session start, seconds since epoch": "1771107686",
+    "Time": "22:21:26",
+    "Timezone offset, milliseconds": "-28800000",
+    "Track ID": "91bb0cdd-339f-4353-bff6-f08eddc0356e",
+    "Track name": "Thunderhill East (Cyclone)",
+    "date": "2/14/26",
+    "session": "Session 3",
+    "time": "22:21:26",
+    "venue_name": "Thunderhill East (Cyclone)"
+   },
+   "traps": []
+  },
+  "processed": {
+   "channels": {
+    "CG Accel Lateral": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      0.0
+     ],
+     "last": [
+      0.96,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 19,
+     "units": "G"
+    },
+    "CG Accel Lateral Smooth": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      0.0
+     ],
+     "last": [
+      0.96,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 19,
+     "units": "G"
+    },
+    "CG Accel Long Smooth": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      0.025492905324448187
+     ],
+     "last": [
+      0.96,
+      -0.0176489344553872
+     ],
+     "max": 0.025492905324448187,
+     "min": -0.0176489344553872,
+     "n": 19,
+     "units": "G"
+    },
+    "CG Accel Longitudinal": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      0.05098581064889637
+     ],
+     "last": [
+      0.96,
+      -0.012746452662224076
+     ],
+     "max": 0.05098581064889637,
+     "min": -0.03823935798667228,
+     "n": 19,
+     "units": "G"
+    },
+    "Chassis Yaw Rate": {
+     "decimals": 2,
+     "first": [
+      0.24,
+      0.0
+     ],
+     "last": [
+      0.96,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 19,
+     "units": "deg/s"
+    },
+    "G Force Combined": {
+     "decimals": 2,
+     "first": [
+      0.24,
+      0.05098581064889637
+     ],
+     "last": [
+      0.96,
+      0.012746452662224076
+     ],
+     "max": 0.05098581064889637,
+     "min": 0.0,
+     "n": 19,
+     "units": "G"
+    },
+    "GPS Altitude": {
+     "decimals": 3,
+     "first": [
+      0.24,
+      57.86
+     ],
+     "last": [
+      0.96,
+      57.96
+     ],
+     "max": 57.96,
+     "min": 57.86,
+     "n": 19,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 3,
+     "first": [
+      0.24,
+      0.0
+     ],
+     "last": [
+      0.96,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 19,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      39.5400992
+     ],
+     "last": [
+      0.96,
+      39.5400994
+     ],
+     "max": 39.5400995,
+     "min": 39.5400992,
+     "n": 19,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      0.24,
+      -122.331463
+     ],
+     "last": [
+      0.96,
+      -122.3314633
+     ],
+     "max": -122.331463,
+     "min": -122.3314634,
+     "n": 19,
+     "units": "deg"
+    },
+    "Ground Speed": {
+     "decimals": 5,
+     "first": [
+      0.24,
+      0.036000000000000004
+     ],
+     "last": [
+      0.96,
+      0.036000000000000004
+     ],
+     "max": 0.14400000000000002,
+     "min": 0.0,
+     "n": 19,
+     "units": "km/h"
+    },
+    "Time": {
+     "decimals": 3,
+     "first": [
+      0.24,
+      0.24
+     ],
+     "last": [
+      0.96,
+      0.96
+     ],
+     "max": 0.96,
+     "min": 0.24,
+     "n": 19,
+     "units": "s"
+    }
+   },
+   "datetime": "2026-02-14T14:21:26",
+   "duration": 0.72,
+   "laps_info": {},
+   "metadata": {
+    "Comment": "The values for Date and Time are provided in UTC.",
+    "Date": "2/14/26",
+    "Session ID": "258c8ec0-af77-4ca4-8a16-0f2177103937",
+    "Session name": "Session 3",
+    "Session start date, local timezone, YYYYMMDD": "20260214",
+    "Session start, seconds since epoch": "1771107686",
+    "Time": "22:21:26",
+    "Timezone offset, milliseconds": "-28800000",
+    "Track ID": "91bb0cdd-339f-4353-bff6-f08eddc0356e",
+    "Track name": "Thunderhill East (Cyclone)",
+    "date": "2/14/26",
+    "session": "Session 3",
+    "time": "22:21:26",
+    "venue_name": "Thunderhill East (Cyclone)",
+    "yaw_rate_source": "gps_heading_derivative"
+   },
+   "traps": []
+  }
+ },
+ "racechrono_sample.csv__from_racechrono_log": {
+  "parse": {
+   "channels": {
+    "Chassis Yaw Rate": {
+     "decimals": 2,
+     "first": [
+      1772927004.643,
+      -0.0
+     ],
+     "last": [
+      1772927004.677,
+      -0.0
+     ],
+     "max": 2.9103830456733704e-11,
+     "min": -2.1827872842550278e-11,
+     "n": 10,
+     "units": "deg/s"
+    },
+    "Engine RPM": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      5560.75
+     ],
+     "last": [
+      1772927004.677,
+      5564.72727
+     ],
+     "max": 5565.0,
+     "min": 5560.0,
+     "n": 10,
+     "units": "rpm"
+    },
+    "GPS Accuracy": {
+     "decimals": 3,
+     "first": [
+      1772927004.643,
+      0.402
+     ],
+     "last": [
+      1772927004.677,
+      0.402
+     ],
+     "max": 0.402,
+     "min": 0.402,
+     "n": 10,
+     "units": "m"
+    },
+    "GPS Altitude": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      91.0936
+     ],
+     "last": [
+      1772927004.677,
+      91.0987
+     ],
+     "max": 91.0987,
+     "min": 91.0936,
+     "n": 10,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 3,
+     "first": [
+      1772927004.643,
+      179.773
+     ],
+     "last": [
+      1772927004.677,
+      179.773
+     ],
+     "max": 179.773,
+     "min": 179.773,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      39.5400169
+     ],
+     "last": [
+      1772927004.677,
+      39.540003
+     ],
+     "max": 39.5400169,
+     "min": 39.540003,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      -122.331175
+     ],
+     "last": [
+      1772927004.677,
+      -122.3311748
+     ],
+     "max": -122.3311748,
+     "min": -122.331175,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Satellites": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      15.0
+     ],
+     "last": [
+      1772927004.677,
+      15.0
+     ],
+     "max": 15.0,
+     "min": 15.0,
+     "n": 10,
+     "units": ""
+    },
+    "Ground Speed": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      163.24272
+     ],
+     "last": [
+      1772927004.677,
+      163.43244
+     ],
+     "max": 163.43244,
+     "min": 163.24272,
+     "n": 10,
+     "units": "km/h"
+    },
+    "accelerator_pos": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      100.0
+     ],
+     "last": [
+      1772927004.677,
+      100.0
+     ],
+     "max": 100.0,
+     "min": 100.0,
+     "n": 10,
+     "units": ""
+    },
+    "brake_pos": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      0.0
+     ],
+     "last": [
+      1772927004.677,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 10,
+     "units": ""
+    },
+    "brake_pressure": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      0.0
+     ],
+     "last": [
+      1772927004.677,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 10,
+     "units": ""
+    },
+    "combined_acc": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      0.12325
+     ],
+     "last": [
+      1772927004.677,
+      0.12226
+     ],
+     "max": 0.12325,
+     "min": 0.12226,
+     "n": 10,
+     "units": ""
+    },
+    "coolant_temp": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      91.0
+     ],
+     "last": [
+      1772927004.677,
+      91.0
+     ],
+     "max": 91.0,
+     "min": 91.0,
+     "n": 10,
+     "units": ""
+    },
+    "device_battery_level": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      83.0
+     ],
+     "last": [
+      1772927004.677,
+      83.0
+     ],
+     "max": 83.0,
+     "min": 83.0,
+     "n": 10,
+     "units": ""
+    },
+    "device_update_rate": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      25.00069
+     ],
+     "last": [
+      1772927004.677,
+      25.00069
+     ],
+     "max": 25.00069,
+     "min": 25.00069,
+     "n": 10,
+     "units": ""
+    },
+    "distance_traveled": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      4709.6477
+     ],
+     "last": [
+      1772927004.677,
+      4711.19215
+     ],
+     "max": 4711.19215,
+     "min": 4709.6477,
+     "n": 10,
+     "units": ""
+    },
+    "elapsed_time": {
+     "decimals": 3,
+     "first": [
+      1772927004.643,
+      465.964
+     ],
+     "last": [
+      1772927004.677,
+      465.998
+     ],
+     "max": 465.998,
+     "min": 465.964,
+     "n": 10,
+     "units": ""
+    },
+    "engine_oil_temp": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      114.0
+     ],
+     "last": [
+      1772927004.677,
+      114.0
+     ],
+     "max": 114.0,
+     "min": 114.0,
+     "n": 10,
+     "units": ""
+    },
+    "fix_type": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      3.0
+     ],
+     "last": [
+      1772927004.677,
+      3.0
+     ],
+     "max": 3.0,
+     "min": 3.0,
+     "n": 10,
+     "units": ""
+    },
+    "fragment_id": {
+     "decimals": 0,
+     "first": [
+      1772927004.643,
+      3.0
+     ],
+     "last": [
+      1772927004.677,
+      3.0
+     ],
+     "max": 3.0,
+     "min": 3.0,
+     "n": 10,
+     "units": ""
+    },
+    "lap_number": {
+     "decimals": 0,
+     "first": [
+      1772927004.643,
+      14.0
+     ],
+     "last": [
+      1772927004.677,
+      14.0
+     ],
+     "max": 14.0,
+     "min": 14.0,
+     "n": 10,
+     "units": ""
+    },
+    "lateral_acc": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      0.01314
+     ],
+     "last": [
+      1772927004.677,
+      0.01039
+     ],
+     "max": 0.01314,
+     "min": 0.01039,
+     "n": 10,
+     "units": ""
+    },
+    "lean_angle": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -0.74526
+     ],
+     "last": [
+      1772927004.677,
+      -0.58742
+     ],
+     "max": -0.58742,
+     "min": -0.74526,
+     "n": 10,
+     "units": ""
+    },
+    "longitudinal_acc": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      0.12254
+     ],
+     "last": [
+      1772927004.677,
+      0.12182
+     ],
+     "max": 0.12254,
+     "min": 0.12182,
+     "n": 10,
+     "units": ""
+    },
+    "steering_angle": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -1.30426
+     ],
+     "last": [
+      1772927004.677,
+      -1.98571
+     ],
+     "max": -1.30426,
+     "min": -1.98571,
+     "n": 10,
+     "units": ""
+    },
+    "x_magnetic_field": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      3.59247
+     ],
+     "last": [
+      1772927004.677,
+      3.656
+     ],
+     "max": 3.675,
+     "min": 3.59247,
+     "n": 10,
+     "units": ""
+    },
+    "x_rate_of_rotation": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      11.375
+     ],
+     "last": [
+      1772927004.677,
+      7.34741
+     ],
+     "max": 15.129,
+     "min": 7.34741,
+     "n": 10,
+     "units": ""
+    },
+    "y_magnetic_field": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -14.15705
+     ],
+     "last": [
+      1772927004.677,
+      -13.988
+     ],
+     "max": -13.95,
+     "min": -14.15705,
+     "n": 10,
+     "units": ""
+    },
+    "y_rate_of_rotation": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -5.501
+     ],
+     "last": [
+      1772927004.677,
+      2.29432
+     ],
+     "max": 2.29432,
+     "min": -5.501,
+     "n": 10,
+     "units": ""
+    },
+    "z_magnetic_field": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      20.26074
+     ],
+     "last": [
+      1772927004.677,
+      20.156
+     ],
+     "max": 20.344,
+     "min": 20.156,
+     "n": 10,
+     "units": ""
+    },
+    "z_rate_of_rotation": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      7.668
+     ],
+     "last": [
+      1772927004.677,
+      -4.21177
+     ],
+     "max": 7.668,
+     "min": -4.21177,
+     "n": 10,
+     "units": ""
+    }
+   },
+   "datetime": "2026-03-07T15:43:24.643000",
+   "duration": 0.03400015830993652,
+   "laps_info": {
+    "fastest_lap": 1,
+    "fastest_time": 0.0,
+    "laps": [
+     {
+      "duration": 0.03400015830993652,
+      "end_time": 0.03400015830993652,
+      "lap_label": "1",
+      "lap_num": 1,
+      "start_time": 0.0,
+      "stint": 0,
+      "type": "Timed"
+     }
+    ],
+    "total_laps": 1
+   },
+   "metadata": {
+    "yaw_rate_source": "gps_heading_derivative"
+   },
+   "traps": []
+  },
+  "processed": {
+   "channels": {
+    "CG Accel Lateral": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      -0.0
+     ],
+     "last": [
+      1772927004.677,
+      -0.0
+     ],
+     "max": 2.3502828517659656e-12,
+     "min": -1.7628325674697717e-12,
+     "n": 10,
+     "units": "G"
+    },
+    "CG Accel Lateral Smooth": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      -9.985599098148402e-15
+     ],
+     "last": [
+      1772927004.677,
+      -9.985599098148402e-15
+     ],
+     "max": -9.985599098148402e-15,
+     "min": -9.985599098148402e-15,
+     "n": 10,
+     "units": "G"
+    },
+    "CG Accel Long Smooth": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      0.15805176241368282
+     ],
+     "last": [
+      1772927004.677,
+      0.15805214691841948
+     ],
+     "max": 0.15805214691841948,
+     "min": 0.15805176241368282,
+     "n": 10,
+     "units": "G"
+    },
+    "CG Accel Longitudinal": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      0.15804862739283623
+     ],
+     "last": [
+      1772927004.677,
+      0.15805490763686844
+     ],
+     "max": 0.15806644188290447,
+     "min": 0.1580348142079717,
+     "n": 10,
+     "units": "G"
+    },
+    "Chassis Yaw Rate": {
+     "decimals": 2,
+     "first": [
+      1772927004.643,
+      -0.0
+     ],
+     "last": [
+      1772927004.677,
+      -0.0
+     ],
+     "max": 2.9103830456733704e-11,
+     "min": -2.1827872842550278e-11,
+     "n": 10,
+     "units": "deg/s"
+    },
+    "Engine RPM": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      5560.75
+     ],
+     "last": [
+      1772927004.677,
+      5564.72727
+     ],
+     "max": 5565.0,
+     "min": 5560.0,
+     "n": 10,
+     "units": "rpm"
+    },
+    "G Force Combined": {
+     "decimals": 2,
+     "first": [
+      1772927004.643,
+      0.15804862739283623
+     ],
+     "last": [
+      1772927004.677,
+      0.15805490763686844
+     ],
+     "max": 0.15806644188290447,
+     "min": 0.1580348142079717,
+     "n": 10,
+     "units": "G"
+    },
+    "GPS Accuracy": {
+     "decimals": 3,
+     "first": [
+      1772927004.643,
+      0.402
+     ],
+     "last": [
+      1772927004.677,
+      0.402
+     ],
+     "max": 0.402,
+     "min": 0.402,
+     "n": 10,
+     "units": "m"
+    },
+    "GPS Altitude": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      91.0936
+     ],
+     "last": [
+      1772927004.677,
+      91.0987
+     ],
+     "max": 91.0987,
+     "min": 91.0936,
+     "n": 10,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 3,
+     "first": [
+      1772927004.643,
+      179.773
+     ],
+     "last": [
+      1772927004.677,
+      179.773
+     ],
+     "max": 179.773,
+     "min": 179.773,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      39.5400169
+     ],
+     "last": [
+      1772927004.677,
+      39.540003
+     ],
+     "max": 39.5400169,
+     "min": 39.540003,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      -122.331175
+     ],
+     "last": [
+      1772927004.677,
+      -122.3311748
+     ],
+     "max": -122.3311748,
+     "min": -122.331175,
+     "n": 10,
+     "units": "deg"
+    },
+    "GPS Satellites": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      15.0
+     ],
+     "last": [
+      1772927004.677,
+      15.0
+     ],
+     "max": 15.0,
+     "min": 15.0,
+     "n": 10,
+     "units": ""
+    },
+    "Ground Speed": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      163.24272
+     ],
+     "last": [
+      1772927004.677,
+      163.43244
+     ],
+     "max": 163.43244,
+     "min": 163.24272,
+     "n": 10,
+     "units": "km/h"
+    },
+    "accelerator_pos": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      100.0
+     ],
+     "last": [
+      1772927004.677,
+      100.0
+     ],
+     "max": 100.0,
+     "min": 100.0,
+     "n": 10,
+     "units": ""
+    },
+    "brake_pos": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      0.0
+     ],
+     "last": [
+      1772927004.677,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 10,
+     "units": ""
+    },
+    "brake_pressure": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      0.0
+     ],
+     "last": [
+      1772927004.677,
+      0.0
+     ],
+     "max": 0.0,
+     "min": 0.0,
+     "n": 10,
+     "units": ""
+    },
+    "combined_acc": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      0.12325
+     ],
+     "last": [
+      1772927004.677,
+      0.12226
+     ],
+     "max": 0.12325,
+     "min": 0.12226,
+     "n": 10,
+     "units": ""
+    },
+    "coolant_temp": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      91.0
+     ],
+     "last": [
+      1772927004.677,
+      91.0
+     ],
+     "max": 91.0,
+     "min": 91.0,
+     "n": 10,
+     "units": ""
+    },
+    "device_battery_level": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      83.0
+     ],
+     "last": [
+      1772927004.677,
+      83.0
+     ],
+     "max": 83.0,
+     "min": 83.0,
+     "n": 10,
+     "units": ""
+    },
+    "device_update_rate": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      25.00069
+     ],
+     "last": [
+      1772927004.677,
+      25.00069
+     ],
+     "max": 25.00069,
+     "min": 25.00069,
+     "n": 10,
+     "units": ""
+    },
+    "distance_traveled": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      4709.6477
+     ],
+     "last": [
+      1772927004.677,
+      4711.19215
+     ],
+     "max": 4711.19215,
+     "min": 4709.6477,
+     "n": 10,
+     "units": ""
+    },
+    "elapsed_time": {
+     "decimals": 3,
+     "first": [
+      1772927004.643,
+      465.964
+     ],
+     "last": [
+      1772927004.677,
+      465.998
+     ],
+     "max": 465.998,
+     "min": 465.964,
+     "n": 10,
+     "units": ""
+    },
+    "engine_oil_temp": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      114.0
+     ],
+     "last": [
+      1772927004.677,
+      114.0
+     ],
+     "max": 114.0,
+     "min": 114.0,
+     "n": 10,
+     "units": ""
+    },
+    "fix_type": {
+     "decimals": 1,
+     "first": [
+      1772927004.643,
+      3.0
+     ],
+     "last": [
+      1772927004.677,
+      3.0
+     ],
+     "max": 3.0,
+     "min": 3.0,
+     "n": 10,
+     "units": ""
+    },
+    "fragment_id": {
+     "decimals": 0,
+     "first": [
+      1772927004.643,
+      3.0
+     ],
+     "last": [
+      1772927004.677,
+      3.0
+     ],
+     "max": 3.0,
+     "min": 3.0,
+     "n": 10,
+     "units": ""
+    },
+    "lap_number": {
+     "decimals": 0,
+     "first": [
+      1772927004.643,
+      14.0
+     ],
+     "last": [
+      1772927004.677,
+      14.0
+     ],
+     "max": 14.0,
+     "min": 14.0,
+     "n": 10,
+     "units": ""
+    },
+    "lateral_acc": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      0.01314
+     ],
+     "last": [
+      1772927004.677,
+      0.01039
+     ],
+     "max": 0.01314,
+     "min": 0.01039,
+     "n": 10,
+     "units": ""
+    },
+    "lean_angle": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -0.74526
+     ],
+     "last": [
+      1772927004.677,
+      -0.58742
+     ],
+     "max": -0.58742,
+     "min": -0.74526,
+     "n": 10,
+     "units": ""
+    },
+    "longitudinal_acc": {
+     "decimals": 7,
+     "first": [
+      1772927004.643,
+      0.12254
+     ],
+     "last": [
+      1772927004.677,
+      0.12182
+     ],
+     "max": 0.12254,
+     "min": 0.12182,
+     "n": 10,
+     "units": ""
+    },
+    "steering_angle": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -1.30426
+     ],
+     "last": [
+      1772927004.677,
+      -1.98571
+     ],
+     "max": -1.30426,
+     "min": -1.98571,
+     "n": 10,
+     "units": ""
+    },
+    "x_magnetic_field": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      3.59247
+     ],
+     "last": [
+      1772927004.677,
+      3.656
+     ],
+     "max": 3.675,
+     "min": 3.59247,
+     "n": 10,
+     "units": ""
+    },
+    "x_rate_of_rotation": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      11.375
+     ],
+     "last": [
+      1772927004.677,
+      7.34741
+     ],
+     "max": 15.129,
+     "min": 7.34741,
+     "n": 10,
+     "units": ""
+    },
+    "y_magnetic_field": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -14.15705
+     ],
+     "last": [
+      1772927004.677,
+      -13.988
+     ],
+     "max": -13.95,
+     "min": -14.15705,
+     "n": 10,
+     "units": ""
+    },
+    "y_rate_of_rotation": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      -5.501
+     ],
+     "last": [
+      1772927004.677,
+      2.29432
+     ],
+     "max": 2.29432,
+     "min": -5.501,
+     "n": 10,
+     "units": ""
+    },
+    "z_magnetic_field": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      20.26074
+     ],
+     "last": [
+      1772927004.677,
+      20.156
+     ],
+     "max": 20.344,
+     "min": 20.156,
+     "n": 10,
+     "units": ""
+    },
+    "z_rate_of_rotation": {
+     "decimals": 5,
+     "first": [
+      1772927004.643,
+      7.668
+     ],
+     "last": [
+      1772927004.677,
+      -4.21177
+     ],
+     "max": 7.668,
+     "min": -4.21177,
+     "n": 10,
+     "units": ""
+    }
+   },
+   "datetime": "2026-03-07T15:43:24.643000",
+   "duration": 0.03400015830993652,
+   "laps_info": {
+    "fastest_lap": 1,
+    "fastest_time": 0.0,
+    "laps": [
+     {
+      "duration": 0.03400015830993652,
+      "end_time": 0.03400015830993652,
+      "lap_label": "1",
+      "lap_num": 1,
+      "start_time": 0.0,
+      "stint": 0,
+      "type": "Timed"
+     }
+    ],
+    "total_laps": 1
+   },
+   "metadata": {
+    "yaw_rate_source": "gps_heading_derivative"
+   },
+   "traps": []
+  }
+ },
+ "vbo_sample.vbo__from_vbo_log": {
+  "parse": {
+   "channels": {
+    "Brake Pos": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.89999999999418,
+      0.0
+     ],
+     "max": 25.333,
+     "min": 0.0,
+     "n": 1500,
+     "units": "%"
+    },
+    "Brake Press": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.89999999999418,
+      0.0
+     ],
+     "max": 2432.0,
+     "min": 0.0,
+     "n": 1500,
+     "units": "kPa"
+    },
+    "CG Accel Lateral": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.89999999999418,
+      0.039
+     ],
+     "max": 0.555,
+     "min": -0.266,
+     "n": 3000,
+     "units": "G"
+    },
+    "CG Accel Longitudinal": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.89999999999418,
+      0.045
+     ],
+     "max": 0.296,
+     "min": -0.286,
+     "n": 3000,
+     "units": "G"
+    },
+    "Coolant Temp": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      81.0
+     ],
+     "last": [
+      149.89999999999418,
+      90.0
+     ],
+     "max": 90.0,
+     "min": 80.0,
+     "n": 1500,
+     "units": "C"
+    },
+    "Engine Oil Temp": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      71.0
+     ],
+     "last": [
+      149.89999999999418,
+      81.0
+     ],
+     "max": 81.0,
+     "min": 71.0,
+     "n": 1500,
+     "units": "C"
+    },
+    "Engine RPM": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      704.0
+     ],
+     "last": [
+      149.89999999999418,
+      2050.0
+     ],
+     "max": 4268.0,
+     "min": 692.0,
+     "n": 1500,
+     "units": "rpm"
+    },
+    "GPS Altitude": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      42.37
+     ],
+     "last": [
+      149.89999999999418,
+      49.94
+     ],
+     "max": 51.28,
+     "min": 42.37,
+     "n": 1500,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      232.74
+     ],
+     "last": [
+      149.89999999999418,
+      181.19
+     ],
+     "max": 353.7,
+     "min": 41.02,
+     "n": 1500,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      62.26971183333333
+     ],
+     "last": [
+      149.89999999999418,
+      62.25394666666667
+     ],
+     "max": 62.269819416666664,
+     "min": 62.25394666666667,
+     "n": 1500,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      -203.50062516666668
+     ],
+     "last": [
+      149.89999999999418,
+      -203.49765383333335
+     ],
+     "max": -203.49756791666667,
+     "min": -203.50062516666668,
+     "n": 1500,
+     "units": "deg"
+    },
+    "GPS Satellites": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      16.0
+     ],
+     "last": [
+      149.89999999999418,
+      15.0
+     ],
+     "max": 16.0,
+     "min": 14.0,
+     "n": 1500,
+     "units": ""
+    },
+    "Ground Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.044
+     ],
+     "last": [
+      149.89999999999418,
+      68.828
+     ],
+     "max": 77.976,
+     "min": 0.007,
+     "n": 3000,
+     "units": "km/h"
+    },
+    "Steering Angle": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.3
+     ],
+     "last": [
+      149.89999999999418,
+      3.8
+     ],
+     "max": 123.514,
+     "min": -278.495,
+     "n": 1500,
+     "units": "deg"
+    },
+    "Throttle Pos": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.89999999999418,
+      21.569
+     ],
+     "max": 80.539,
+     "min": 0.0,
+     "n": 1500,
+     "units": "%"
+    },
+    "Vehicle Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.89999999999418,
+      69.016
+     ],
+     "max": 77.927,
+     "min": 0.0,
+     "n": 1500,
+     "units": "km/h"
+    }
+   },
+   "datetime": "2026-01-01T10:00:00",
+   "duration": 149.89999999999418,
+   "laps_info": {},
+   "metadata": {},
+   "traps": []
+  },
+  "processed": {
+   "channels": {
+    "Brake Pos": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      0.0
+     ],
+     "max": 25.333,
+     "min": 0.0,
+     "n": 2997,
+     "units": "%"
+    },
+    "Brake Pos Rate": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      0.0
+     ],
+     "max": 65.45000000296989,
+     "min": -111.53999999015966,
+     "n": 2997,
+     "units": "%/s"
+    },
+    "Brake Press": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      0.0
+     ],
+     "max": 2432.0,
+     "min": 0.0,
+     "n": 2997,
+     "units": "kPa"
+    },
+    "CG Accel Lateral": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      8.697070841279242e-13
+     ],
+     "max": 0.5549999999838316,
+     "min": -0.2639999999846276,
+     "n": 2997,
+     "units": "G"
+    },
+    "CG Accel Lateral Smooth": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      0.01819999999988694
+     ],
+     "max": 0.27640000000000003,
+     "min": -0.13090000000000002,
+     "n": 2997,
+     "units": "G"
+    },
+    "CG Accel Long Smooth": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      -0.0005
+     ],
+     "last": [
+      149.8,
+      0.024299999999869544
+     ],
+     "max": 0.1447,
+     "min": -0.14009999999999997,
+     "n": 2997,
+     "units": "G"
+    },
+    "CG Accel Longitudinal": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      -0.001
+     ],
+     "last": [
+      149.8,
+      1.1596071325392643e-12
+     ],
+     "max": 0.295,
+     "min": -0.286,
+     "n": 2997,
+     "units": "G"
+    },
+    "Chassis Yaw Rate": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      1.5000000000207194
+     ],
+     "max": 30.875000002120203,
+     "min": -150.0,
+     "n": 2997,
+     "units": "deg/s"
+    },
+    "Coolant Temp": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      81.0
+     ],
+     "last": [
+      149.8,
+      90.0
+     ],
+     "max": 90.0,
+     "min": 80.0,
+     "n": 2997,
+     "units": "C"
+    },
+    "Engine Oil Temp": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      71.0
+     ],
+     "last": [
+      149.8,
+      81.0
+     ],
+     "max": 81.0,
+     "min": 71.0,
+     "n": 2997,
+     "units": "C"
+    },
+    "Engine RPM": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      704.0
+     ],
+     "last": [
+      149.8,
+      1838.9999999965503
+     ],
+     "max": 4268.0,
+     "min": 692.0000000003492,
+     "n": 2997,
+     "units": "rpm"
+    },
+    "G Force Combined": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.001
+     ],
+     "last": [
+      149.8,
+      1.4495071809506044e-12
+     ],
+     "max": 0.5728778229089325,
+     "min": 0.0,
+     "n": 2997,
+     "units": "G"
+    },
+    "GPS Altitude": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      42.37
+     ],
+     "last": [
+      149.8,
+      49.95999999999971
+     ],
+     "max": 51.279999999998836,
+     "min": 42.37,
+     "n": 2997,
+     "units": "m"
+    },
+    "GPS Heading": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      232.74
+     ],
+     "last": [
+      149.8,
+      181.51000000000377
+     ],
+     "max": 353.6999999929598,
+     "min": 41.02000000037954,
+     "n": 2997,
+     "units": "deg"
+    },
+    "GPS Latitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      62.26971183333333
+     ],
+     "last": [
+      149.8,
+      62.25396391666666
+     ],
+     "max": 62.269819416666664,
+     "min": 62.25396391666666,
+     "n": 2997,
+     "units": "deg"
+    },
+    "GPS Longitude": {
+     "decimals": 7,
+     "first": [
+      0.0,
+      -203.50062516666668
+     ],
+     "last": [
+      149.8,
+      -203.49765333333335
+     ],
+     "max": -203.49756791666667,
+     "min": -203.50062516666668,
+     "n": 2997,
+     "units": "deg"
+    },
+    "GPS Satellites": {
+     "decimals": 0,
+     "first": [
+      0.0,
+      16.0
+     ],
+     "last": [
+      149.8,
+      15.0
+     ],
+     "max": 16.0,
+     "min": 14.0,
+     "n": 2997,
+     "units": ""
+    },
+    "Ground Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.044
+     ],
+     "last": [
+      149.8,
+      68.55999999999537
+     ],
+     "max": 77.976,
+     "min": 0.0070000000013109515,
+     "n": 2997,
+     "units": "km/h"
+    },
+    "Steering Angle": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.3
+     ],
+     "last": [
+      149.8,
+      3.545999999993941
+     ],
+     "max": 123.51399999998809,
+     "min": -278.495,
+     "n": 2997,
+     "units": "deg"
+    },
+    "Steering Angle Rate": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      2.0899999995661176
+     ],
+     "max": 186.84999998779682,
+     "min": -274.1099999840447,
+     "n": 2997,
+     "units": "deg/s"
+    },
+    "Throttle Pos": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      21.569000000011364
+     ],
+     "max": 80.53899999987398,
+     "min": 0.0,
+     "n": 2997,
+     "units": "%"
+    },
+    "Throttle Pos Rate": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      -3.9199999997718207
+     ],
+     "max": 188.88000001225518,
+     "min": -151.40999998738704,
+     "n": 2997,
+     "units": "%/s"
+    },
+    "Vehicle Speed": {
+     "decimals": 2,
+     "first": [
+      0.0,
+      0.0
+     ],
+     "last": [
+      149.8,
+      68.92199999999715
+     ],
+     "max": 77.92699999999792,
+     "min": 0.0,
+     "n": 2997,
+     "units": "km/h"
+    }
+   },
+   "datetime": "2026-01-01T10:00:00",
+   "duration": 149.8,
+   "laps_info": {},
+   "metadata": {
+    "yaw_rate_source": "gps_heading_derivative"
+   },
+   "traps": []
+  }
+ }
+}

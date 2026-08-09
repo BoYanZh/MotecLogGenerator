@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+# Binary telemetry and generated log formats must never be line-normalized.
+*.ibt binary
+*.ld binary
+*.blap binary
+*.olap binary
+*.ghost binary

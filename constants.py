@@ -233,3 +233,16 @@ RCZ_PID_MAP = {
     "10031": (CH_AMBIENT_TEMP, "C", 1.0, 0.0),            # Ambient Temp (16 ~ 87 C)
     "1053576": (CH_WHEEL_SPEED_AVG, "rpm", 1.0, 0.0),     # Wheel Speed (1296 ~ 3230)
 }
+
+# ----------------------------------------------------------------------------
+# Track Start/Finish Beacons Coordinate Database
+# ----------------------------------------------------------------------------
+TRACK_BEACONS = {
+    "WeatherTech Raceway Laguna Seca": {"lat": 36.58646300, "lon": -121.75664133, "heading_deg": 215.0, "name": "Start/Finish"},
+    "Sonoma Raceway": {"lat": 38.16146533, "lon": -122.45478067, "heading_deg": 309.0, "name": "Start/Finish"},
+    "Thunderhill East Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill East Cyclone": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill 5 Mile Double Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill 5 Mile Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill 5 Mile Full": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+}
