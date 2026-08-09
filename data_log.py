@@ -35,6 +35,7 @@ from constants import (
     CH_GPS_FIX, CH_LAP_NUMBER,
     CHANNEL_ALIASES, DISCRETE_CHANNELS,
     IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP, IBT_BRAKE_PRESS_MAP,
+    RCZ_PID_MAP,
 )
 
 TRACK_BEACONS = {
@@ -1949,26 +1950,7 @@ class DataLog(object):
             # RCZ stores binary channel values as contiguous IEEE 754 float64 (double precision) values.
             # Values are ALREADY in engineering units (1:1 scale).
             # Internal RCZ channel PID to MoTeC channel name & unit mapping:
-            rcz_pid_map = {
-                "10024": ("Engine RPM", "rpm", 1.0, 0.0),            # 605 ~ 7489 rpm
-                "10025": ("Accelerator Pos", "%", 1.0, 0.0),         # 0 ~ 100 % (Pedal)
-                "10071": ("Throttle Pos", "%", 1.0, 0.0),            # 0 ~ 100 % (Throttle Valve)
-                "1002":  ("Brake Pos", "%", 1.0, 0.0),               # 0 ~ 100 %
-                "1033":  ("Brake Press", "kPa", 1.0, 0.0),           # 0 ~ 9600 kPa
-                "1007":  ("Engine Oil Press", "kPa", 1.0, 0.0),      # 110 ~ 683 kPa
-                "10066": ("Engine Oil Temp", "C", 1.0, 0.0),         # 57 ~ 104 C
-                "10026": ("Coolant Temp", "C", 1.0, 0.0),            # 67 ~ 95 C
-                "1005":  ("Gearbox Temp", "C", 1.0, 0.0),            # 63 ~ 114 C
-                "10029": ("Intake Temp", "C", 1.0, 0.0),             # 29 ~ 42 C
-                "1001":  ("Steering Angle", "deg", -1.0, 0.0),        # -294 ~ 457 deg
-                "1004":  ("Gear", "", 1.0, 0.0),                     # -1 ~ 5 (Integer gear)
-                "4":     ("Ground Speed", "km/h", 3.6, 0.0),         # raw is m/s (0 ~ 50 m/s -> km/h)
-                "51":    ("Chassis Yaw Rate", "deg/s", 1.0, 0.0),    # -37 ~ 39 deg/s
-                "7":     ("Roll Angle", "deg", 1.0, 0.0),            # Roll Angle (-11.6 ~ 11.2 deg)
-                "8":     ("Pitch Angle", "deg", 1.0, 0.0),           # Pitch Angle (-10.6 ~ 4.0 deg)
-                "10031": ("Ambient Temp", "C", 1.0, 0.0),            # Ambient Temp (16 ~ 87 C)
-                "1053576": ("Wheel Speed Avg", "rpm", 1.0, 0.0),     # Wheel Speed (1296 ~ 3230)
-            }
+            rcz_pid_map = RCZ_PID_MAP
 
             for name in namelist:
                 base_fname = os.path.basename(name)
