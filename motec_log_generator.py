@@ -29,7 +29,7 @@ channel names and units automatically where applicable.
 """
 
 
-def _get_stints(rcz_path):
+def get_rcz_stints(rcz_path):
     with zipfile.ZipFile(rcz_path, 'r') as z:
         if "session.json" in z.namelist():
             session_json = json.loads(z.read("session.json").decode("utf-8"))
@@ -38,10 +38,18 @@ def _get_stints(rcz_path):
     return [0]
 
 
-def _normalize_venue(name):
+_get_stints = get_rcz_stints
+
+
+def normalize_venue_name(name):
     from processing.venue_normalizer import normalize_venue
     return normalize_venue(name)
-def _auto_detect_log_type(file_path):
+
+
+_normalize_venue = normalize_venue_name
+
+
+def auto_detect_log_type(file_path):
     if file_path.lower().endswith(".ibt"):
         return "IBT"
     if file_path.endswith(".rcz"):
@@ -64,13 +72,16 @@ def _auto_detect_log_type(file_path):
     return "CSV"
 
 
-def _process_one(args, stint_override=None, output_override=None):
+_auto_detect_log_type = auto_detect_log_type
+
+
+def process_one_file(args, stint_override=None, output_override=None):
     stint_arg = stint_override if stint_override is not None else args.stint
     out_base = output_override if output_override is not None else args.output
 
     active_type = args.log_type
     if active_type == "AUTO":
-        active_type = _auto_detect_log_type(args.log)
+        active_type = auto_detect_log_type(args.log)
         print(f"Auto-detected log type: {active_type}")
 
     print("Loading log...")
@@ -226,6 +237,9 @@ def _process_one(args, stint_override=None, output_override=None):
             print("Saved .kml Google Earth file: %s" % kml_filename)
 
     print("Done!")
+
+
+_process_one = process_one_file
 
 
 if __name__ == '__main__':

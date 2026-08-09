@@ -34,30 +34,31 @@ def calculate_math_channels(data_log, g_source="auto", kinematics=False):
       - "sensor": Only use raw IMU sensor G channels. Do not derive G from GPS.
       - "calc": Force deriving G channels from GPS Speed + Yaw Rate, overriding sensor channels.
     """
-    _derive_yaw_rate_from_gps_heading(data_log)
+    derive_yaw_rate_from_gps_heading(data_log)
 
     if g_source == "calc":
         if CH_CG_ACCEL_LAT in data_log.channels:
             del data_log.channels[CH_CG_ACCEL_LAT]
         if CH_CG_ACCEL_LON in data_log.channels:
             del data_log.channels[CH_CG_ACCEL_LON]
-        _derive_cg_accel_lateral(data_log, force=True)
-        _derive_cg_accel_longitudinal(data_log, force=True)
+        derive_cg_accel_lateral(data_log, force=True)
+        derive_cg_accel_longitudinal(data_log, force=True)
     elif g_source == "sensor":
         pass
     else:  # "auto"
-        _derive_cg_accel_lateral(data_log, force=False)
-        _derive_cg_accel_longitudinal(data_log, force=False)
+        derive_cg_accel_lateral(data_log, force=False)
+        derive_cg_accel_longitudinal(data_log, force=False)
 
-    _derive_smoothed_accel(data_log)
+    derive_smoothed_accel(data_log)
     if kinematics:
-        _calculate_kinematics(data_log)
-    _calculate_g_sum(data_log)
-    _derive_brake_pos(data_log)
-    _calculate_input_rates(data_log)
-    _mirror_throttle_accel(data_log)
+        calculate_kinematics(data_log)
+    calculate_g_sum(data_log)
+    derive_brake_pos(data_log)
+    calculate_input_rates(data_log)
+    mirror_throttle_accel(data_log)
 
-def _derive_smoothed_accel(data_log, window_sec=0.5):
+
+def derive_smoothed_accel(data_log, window_sec=0.5):
     """ Derive 0.5s moving average smoothed G channels for clean G-G diagrams in MoTeC. """
     for raw_name, smooth_name in [(CH_CG_ACCEL_LAT, CH_CG_ACCEL_LAT_SMOOTH),
                                   (CH_CG_ACCEL_LON, CH_CG_ACCEL_LON_SMOOTH)]:
@@ -78,7 +79,8 @@ def _derive_smoothed_accel(data_log, window_sec=0.5):
                 Message(ch.messages[i].timestamp, float(smoothed[i])) for i in range(len(vals))
             ]
 
-def _derive_cg_accel_lateral(data_log, force=False):
+
+def derive_cg_accel_lateral(data_log, force=False):
     if not force and CH_CG_ACCEL_LAT in data_log.channels:
         return
     if CH_GROUND_SPEED not in data_log.channels or CH_YAW_RATE not in data_log.channels:
@@ -95,7 +97,8 @@ def _derive_cg_accel_lateral(data_log, force=False):
     data_log.add_channel(CH_CG_ACCEL_LAT, "G", float, 2)
     data_log.channels[CH_CG_ACCEL_LAT].messages = [Message(t_arr[i], ay[i]) for i in range(n)]
 
-def _derive_cg_accel_longitudinal(data_log, force=False):
+
+def derive_cg_accel_longitudinal(data_log, force=False):
     if not force and CH_CG_ACCEL_LON in data_log.channels:
         return
     if CH_GROUND_SPEED not in data_log.channels:
@@ -110,13 +113,15 @@ def _derive_cg_accel_longitudinal(data_log, force=False):
     data_log.add_channel(CH_CG_ACCEL_LON, "G", float, 2)
     data_log.channels[CH_CG_ACCEL_LON].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
 
+
 _KINEMATICS_STEERING_RATIO = 13.5
 _KINEMATICS_WHEELBASE_M = 2.575
 _KINEMATICS_CG_TO_FRONT_AXLE_M = 1.25
 _KINEMATICS_CG_TO_REAR_AXLE_M = 1.325
 _KINEMATICS_LAT_VEL_TAU_S = 2.0
 
-def _calculate_kinematics(data_log):
+
+def calculate_kinematics(data_log):
     required = [CH_GROUND_SPEED, CH_CG_ACCEL_LAT, CH_YAW_RATE]
     if not all(r in data_log.channels for r in required):
         return
@@ -177,7 +182,8 @@ def _calculate_kinematics(data_log):
     data_log.add_channel(CH_UNDERSTEER_INDEX, "deg", float, 2)
     data_log.channels[CH_UNDERSTEER_INDEX].messages = [Message(time[i], us_index[i]) for i in range(n)]
 
-def _calculate_g_sum(data_log):
+
+def calculate_g_sum(data_log):
     if CH_CG_ACCEL_LON not in data_log.channels or CH_CG_ACCEL_LAT not in data_log.channels:
         return
     ax_msgs = data_log.channels[CH_CG_ACCEL_LON].messages
@@ -192,7 +198,8 @@ def _calculate_g_sum(data_log):
     data_log.add_channel(CH_G_COMBINED, "G", float, 2)
     data_log.channels[CH_G_COMBINED].messages = [Message(time_g[i], g_sum[i]) for i in range(n)]
 
-def _derive_brake_pos(data_log):
+
+def derive_brake_pos(data_log):
     if CH_BRAKE_PRESS not in data_log.channels or CH_BRAKE_POS in data_log.channels:
         return
     press_chan = data_log.channels[CH_BRAKE_PRESS]
@@ -207,19 +214,22 @@ def _derive_brake_pos(data_log):
     data_log.add_channel(CH_BRAKE_POS, "%", float, 2)
     data_log.channels[CH_BRAKE_POS].messages = [Message(time_p[i], bpos[i]) for i in range(n)]
 
-def _calculate_input_rates(data_log):
-    _calculate_rate(data_log, CH_STEERING_ANGLE, "deg/s")
-    _calculate_rate(data_log, CH_THROTTLE_POS, "%/s")
-    _calculate_rate(data_log, CH_BRAKE_POS, "%/s")
 
-def _mirror_throttle_accel(data_log):
+def calculate_input_rates(data_log):
+    calculate_rate(data_log, CH_STEERING_ANGLE, "deg/s")
+    calculate_rate(data_log, CH_THROTTLE_POS, "%/s")
+    calculate_rate(data_log, CH_BRAKE_POS, "%/s")
+
+
+def mirror_throttle_accel(data_log):
     if CH_THROTTLE_POS not in data_log.channels and CH_ACCELERATOR_POS in data_log.channels:
         src = data_log.channels[CH_ACCELERATOR_POS]
         data_log.add_channel(CH_THROTTLE_POS, "%", float, 2)
         data_log.channels[CH_THROTTLE_POS].messages = [Message(m.timestamp, m.value) for m in src.messages]
 
-def _calculate_rate(data_log, channel_name, unit):
-    """ Internal helper to calculate the rate of change for a channel. """
+
+def calculate_rate(data_log, channel_name, unit):
+    """ Helper to calculate the rate of change for a channel. """
     if channel_name in data_log.channels:
         chan = data_log.channels[channel_name]
         vals = np.array([m.value for m in chan.messages])
@@ -228,14 +238,15 @@ def _calculate_rate(data_log, channel_name, unit):
             return
         rate = np.zeros(len(times))
         dt = np.diff(times)
-        dt[dt == 0] = 0.001 # Prevent div by zero
+        dt[dt == 0] = 0.001  # Prevent div by zero
         rate[1:] = np.diff(vals) / dt
 
         new_name = channel_name + " Rate"
         data_log.add_channel(new_name, unit, float, 2)
         data_log.channels[new_name].messages = [Message(times[i], rate[i]) for i in range(len(times))]
 
-def _derive_yaw_rate_from_gps_heading(data_log):
+
+def derive_yaw_rate_from_gps_heading(data_log):
     if CH_YAW_RATE in data_log.channels:
         return
     gps_h_chan = data_log.channels.get(CH_GPS_HEADING)
@@ -261,3 +272,16 @@ def _derive_yaw_rate_from_gps_heading(data_log):
     data_log.add_channel(CH_YAW_RATE, "deg/s", float, 2)
     data_log.channels[CH_YAW_RATE].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
     data_log.metadata["yaw_rate_source"] = "gps_heading_derivative"
+
+
+# Backward compatibility aliases
+_derive_smoothed_accel = derive_smoothed_accel
+_derive_cg_accel_lateral = derive_cg_accel_lateral
+_derive_cg_accel_longitudinal = derive_cg_accel_longitudinal
+_calculate_kinematics = calculate_kinematics
+_calculate_g_sum = calculate_g_sum
+_derive_brake_pos = derive_brake_pos
+_calculate_input_rates = calculate_input_rates
+_mirror_throttle_accel = mirror_throttle_accel
+_calculate_rate = calculate_rate
+_derive_yaw_rate_from_gps_heading = derive_yaw_rate_from_gps_heading
