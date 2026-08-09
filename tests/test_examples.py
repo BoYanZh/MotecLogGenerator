@@ -294,6 +294,28 @@ def test_mask_interp_gaps_enabled():
     assert np.isnan(vals[mid_idx])
 
 
+def test_compute_gps_heading():
+    from tools.convert_acti import compute_gps_heading
+    # Moving North: x=0, y increases -> 0 deg
+    x = np.zeros(10)
+    y = np.linspace(0, 100, 10)
+    hdg_north = compute_gps_heading(x, y)
+    assert np.allclose(hdg_north, 0.0)
+
+    # Moving East: x increases, y=0 -> 90 deg
+    x = np.linspace(0, 100, 10)
+    y = np.zeros(10)
+    hdg_east = compute_gps_heading(x, y)
+    assert np.allclose(hdg_east, 90.0)
+
+    # Moving South: x=0, y decreases -> 180 deg
+    x = np.zeros(10)
+    y = np.linspace(100, 0, 10)
+    hdg_south = compute_gps_heading(x, y)
+    assert np.allclose(hdg_south, 180.0)
+
+
+
 
 # ---------------------------------------------------------------------------
 # Empty channels guard

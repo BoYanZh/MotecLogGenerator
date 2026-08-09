@@ -64,7 +64,34 @@ def transform_ac_to_gps(ac_x, ac_y, track_cfg):
 
     lat = ref_lat + (y_real_m / 111000.0)
     lon = ref_lon + (x_real_m / 85670.0)
-    return lat, lon
+    return lat, lon, x_real_m, y_real_m
+
+
+def compute_gps_heading(x_real_m, y_real_m):
+    """Computes course heading angle in degrees (0..360, 0=North, 90=East)."""
+    dx = np.gradient(x_real_m)
+    dy = np.gradient(y_real_m)
+    dist_step = np.hypot(dx, dy)
+
+    raw_heading = np.degrees(np.arctan2(dx, dy)) % 360.0
+
+    moving = dist_step > 0.01  # > 1cm per sample step threshold
+    if not np.any(moving):
+        return np.zeros_like(raw_heading)
+
+    hdg = np.copy(raw_heading)
+    last_hdg = 0.0
+    for i in range(len(hdg)):
+        if moving[i]:
+            last_hdg = hdg[i]
+        else:
+            hdg[i] = last_hdg
+
+    first_mov = np.argmax(moving)
+    if moving[first_mov]:
+        hdg[:first_mov] = hdg[first_mov]
+
+    return np.round(hdg, 3)
 
 
 def auto_detect_track_key(input_ld, configs):
@@ -93,11 +120,23 @@ def align_acti_file(input_ld, output_dir, track_cfg):
 
     ch_x = get_ch("Car Coord X")
     ch_y = get_ch("Car Coord Y")
-    if ch_x is None or ch_y is None:
-        print(f"SKIP {input_ld}: Missing Car Coord X / Y channels")
+    ch_lat = get_ch("GPS Latitude")
+    ch_lon = get_ch("GPS Longitude")
+
+    if ch_x is not None and ch_y is not None:
+        lat, lon, x_real_m, y_real_m = transform_ac_to_gps(ch_x.data, ch_y.data, track_cfg)
+        freq = ch_x.freq if ch_x.freq > 0 else 20
+    elif ch_lat is not None and ch_lon is not None:
+        lat, lon = ch_lat.data, ch_lon.data
+        ref_lat, ref_lon = float(np.mean(lat)), float(np.mean(lon))
+        x_real_m = (lon - ref_lon) * 85670.0
+        y_real_m = (lat - ref_lat) * 111000.0
+        freq = ch_lat.freq if ch_lat.freq > 0 else 20
+    else:
+        print(f"SKIP {input_ld}: Missing Car Coord X/Y or GPS Latitude/Longitude channels")
         return False
 
-    lat, lon = transform_ac_to_gps(ch_x.data, ch_y.data, track_cfg)
+    heading = compute_gps_heading(x_real_m, y_real_m)
 
     dl = DataLog()
     dl.metadata["venue_name"] = track_cfg.get("name", "Unknown Venue")
@@ -113,14 +152,17 @@ def align_acti_file(input_ld, output_dir, track_cfg):
             times = np.linspace(0, len(c.data) / freq, len(c.data))
             dl.channels[c.name].messages = [Message(times[i], float(c.data[i])) for i in range(len(c.data))]
 
-    # Add GPS Latitude / Longitude
-    times = np.linspace(0, len(lat) / ch_x.freq, len(lat))
+    # Add GPS Latitude / Longitude / Heading
+    times = np.linspace(0, len(lat) / freq, len(lat))
 
     dl.add_channel("GPS Latitude", "deg", float, 7)
     dl.channels["GPS Latitude"].messages = [Message(times[i], float(lat[i])) for i in range(len(lat))]
 
     dl.add_channel("GPS Longitude", "deg", float, 7)
     dl.channels["GPS Longitude"].messages = [Message(times[i], float(lon[i])) for i in range(len(lon))]
+
+    dl.add_channel("GPS Heading", "deg", float, 3)
+    dl.channels["GPS Heading"].messages = [Message(times[i], float(heading[i])) for i in range(len(heading))]
 
     # Build MotecLog with full header metadata preserved
     ml = MotecLog()
@@ -181,7 +223,7 @@ def calibrate_track(rw_ld_path, acti_ld_path, track_key, track_name=None):
     ref_lat = float(rw_lat[mask_rw].mean())
     ref_lon = float(rw_lon[mask_rw].mean())
 
-    rw_x = (rw_lat[mask_rw] - ref_lat) * 85670.0
+    rw_x = (rw_lon[mask_rw] - ref_lon) * 85670.0
     rw_y = (rw_lat[mask_rw] - ref_lat) * 111000.0
     rw_pts = np.column_stack([rw_x, rw_y])
     tree = cKDTree(rw_pts)
