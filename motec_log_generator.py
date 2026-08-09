@@ -216,6 +216,8 @@ def _process_one(args, stint_override=None, output_override=None):
     else:
         venue_name = _normalize_venue(venue_name)
 
+    data_log.metadata["venue_name"] = venue_name
+
     event_name = args.event_name if args.event_name else meta.get("event_name", "")
     if not event_name and venue_name:
         event_name = venue_name.replace("_", " ").title() + " Track Day" if not venue_name.endswith("Track Day") else venue_name

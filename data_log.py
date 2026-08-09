@@ -181,11 +181,18 @@ class DataLog(object):
         traps = list(getattr(self, "traps", []) or [])
 
         if not traps:
-            venue = self.metadata.get("venue_name", "")
-            for k, v in TRACK_BEACONS.items():
-                if k.lower() in venue.lower():
-                    traps = [v]
-                    break
+            venue = self.metadata.get("venue_name", "").lower().replace("_", " ").replace("-", " ").replace(",", " ")
+            if "laguna" in venue or "seca" in venue:
+                traps = [TRACK_BEACONS["WeatherTech Raceway Laguna Seca"]]
+            elif "sonoma" in venue:
+                traps = [TRACK_BEACONS["Sonoma Raceway"]]
+            elif any(k in venue for k in ["thunderhill", "thunder hill", "thill", "thunderhil"]):
+                if any(k in venue for k in ["5 mile", "5 miles", "5mi"]):
+                    traps = [TRACK_BEACONS["Thunderhill 5 Mile Double Bypass"]]
+                elif "cyclone" in venue:
+                    traps = [TRACK_BEACONS["Thunderhill East Cyclone"]]
+                elif "west" not in venue:
+                    traps = [TRACK_BEACONS["Thunderhill East Bypass"]]
 
         if not traps:
             return []
