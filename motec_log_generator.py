@@ -39,57 +39,63 @@ def _get_stints(rcz_path):
     return [0]
 
 
-VENUE_NORMALIZE = {
-    "thunderhill raceway park": "Thunderhill Raceway Park",
-    "thunder hill raceway park": "Thunderhill Raceway Park",
-    "thunderhill": "Thunderhill Raceway Park",
-    "thunder hill": "Thunderhill Raceway Park",
-    "thill": "Thunderhill Raceway Park",
-    "laguna seca": "Laguna Seca",
-    "laguna": "Laguna Seca",
-    "sonoma raceway": "Sonoma Raceway",
-    "sonoma": "Sonoma Raceway",
-}
-
-
 def _normalize_venue(name):
     if not name:
         return name
-    clean_name = name.replace(".csv", "").replace(".rcz", "").replace(",", " ")
-    lower_search = clean_name.lower().replace("_", " ").replace("-", " ")
+    s_lower = name.lower().replace("_", " ").replace("-", " ").replace(",", " ")
 
-    for key in sorted(VENUE_NORMALIZE.keys(), key=len, reverse=True):
-        if key in lower_search:
-            canonical = VENUE_NORMALIZE[key]
-            idx = lower_search.index(key) + len(key)
-            raw_suffix = clean_name.replace("_", " ").replace("-", " ")[idx:].strip()
-            raw_suffix = raw_suffix.replace("(", " ").replace(")", " ").strip()
+    # 1. Thunderhill Raceway Park variants
+    if any(k in s_lower for k in ["thunderhill", "thunder hill", "thill", "thunderhil"]):
+        if any(k in s_lower for k in ["5 mile", "5 miles", "5mi"]):
+            if "double bypass" in s_lower or "db" in s_lower:
+                return "Thunderhill 5 Mile Double Bypass"
+            elif "bypass" in s_lower:
+                return "Thunderhill 5 Mile Bypass"
+            else:
+                return "Thunderhill 5 Mile Full"
 
-            # Truncate at common filename separators
-            raw_suffix = re.split(r"\s+-\s+|\s+_\s+|\s+\d{4}\b", raw_suffix)[0].strip()
+        if "west" in s_lower:
+            if "bypass" in s_lower:
+                return "Thunderhill West Bypass"
+            return "Thunderhill West"
 
-            # Clean up generic track suffix words if canonical already contains them
-            for generic in ["raceway park", "raceway", "park", "track", "seca"]:
-                if raw_suffix.lower().startswith(generic):
-                    raw_suffix = raw_suffix[len(generic):].strip()
+        if "cyclone" in s_lower:
+            return "Thunderhill East Cyclone"
+        if "bypass" in s_lower or "by" in s_lower:
+            return "Thunderhill East Bypass"
+        if "east" in s_lower:
+            return "Thunderhill East"
 
-            # Clean up trailing file artifacts
-            raw_suffix = re.sub(r"\blap\s*\d+.*$", "", raw_suffix, flags=re.IGNORECASE).strip()
-            raw_suffix = re.sub(r"\bv\d+.*$", "", raw_suffix, flags=re.IGNORECASE).strip()
-            raw_suffix = re.sub(r"\bstint\s*\d+.*$", "", raw_suffix, flags=re.IGNORECASE).strip()
+        return "Thunderhill Raceway Park"
 
-            suffix = " ".join(raw_suffix.split())
-            for abbr, full in [("EST", "East"), ("BY", "Bypass"), ("EB", "East Bypass"),
-                                ("CCW", "CCW"), ("CW", "CW")]:
-                suffix = re.sub(r"\b" + abbr + r"\b", full, suffix, flags=re.IGNORECASE)
+    # 2. Buttonwillow Raceway Park variants
+    if "buttonwillow" in s_lower or "bwc" in s_lower:
+        if "25ccw" in s_lower or "25 ccw" in s_lower:
+            return "Buttonwillow 25CCW"
+        elif "13cw" in s_lower or "13 cw" in s_lower:
+            return "Buttonwillow 13CW"
+        elif "the circuit" in s_lower or "circuit" in s_lower:
+            return "Buttonwillow The Circuit"
+        return "Buttonwillow Raceway Park"
 
-            suffix = " ".join(suffix.split())
-            if suffix:
-                formatted_suffix = suffix.title() if (suffix.islower() or suffix.isupper()) and len(suffix) > 3 else suffix
-                formatted_suffix = re.sub(r"\bCcw\b", "CCW", formatted_suffix)
-                formatted_suffix = re.sub(r"\bCw\b", "CW", formatted_suffix)
-                return f"{canonical} ({formatted_suffix})"
-            return canonical
+    # 3. Laguna Seca
+    if "laguna" in s_lower or "seca" in s_lower:
+        return "WeatherTech Raceway Laguna Seca"
+
+    # 4. Sonoma Raceway
+    if "sonoma" in s_lower:
+        return "Sonoma Raceway"
+
+    # 5. Willow Springs
+    if "streets of willow" in s_lower or "sow" in s_lower:
+        return "Streets of Willow"
+    if "willow" in s_lower:
+        return "Willow Springs Raceway"
+
+    # 6. Chuckwalla
+    if "chuckwalla" in s_lower:
+        return "Chuckwalla Valley Raceway"
+
     return name
 
 
@@ -255,11 +261,15 @@ def _process_one(args, stint_override=None, output_override=None):
         print("Directory '%s' does not exist, will create it" % output_dir)
         os.makedirs(output_dir)
 
-    motec_log.write(ld_filename)
-    beacons = data_log.detect_beacons()
-    motec_log.write_ldx(ldx_filename, getattr(data_log, "laps_info", None), beacons=beacons)
-    print("Saved .ld file: %s" % ld_filename)
-    print("Saved .ldx file: %s" % ldx_filename)
+    try:
+        motec_log.write(ld_filename)
+        beacons = data_log.detect_beacons()
+        motec_log.write_ldx(ldx_filename, getattr(data_log, "laps_info", None), beacons=beacons)
+        print("Saved .ld file: %s" % ld_filename)
+        print("Saved .ldx file: %s" % ldx_filename)
+    except PermissionError:
+        print("  [LOCKED/SKIP] File is currently open in MoTeC i2: %s" % ld_filename)
+        return
 
     if args.gpx:
         gpx_filename = os.path.splitext(ld_filename)[0] + ".gpx"
