@@ -125,6 +125,22 @@ CHANNEL_ALIASES = {
     "engine_oil_temp":        (CH_ENGINE_OIL_TEMP, "C", 2),
     "engine_oil_temp-canbus": (CH_ENGINE_OIL_TEMP, "C", 2),
     "Gear":                   (CH_GEAR, "", 0),
+
+    # RaceChrono raw OBD_ IDs (Toyota GR86 / FT86 CAN Bus)
+    "OBD_164854":             ("Tire Press FL", "kPa", 2),
+    "OBD_132086":             ("Tire Press FR", "kPa", 2),
+    "OBD_197622":             ("Tire Press RL", "kPa", 2),
+    "OBD_99318":              ("Tire Press RR", "kPa", 2),
+    "OBD_164855":             ("Tire Status FL", "", 0),
+    "OBD_132087":             ("Tire Status FR", "", 0),
+    "OBD_197623":             ("Tire Status RL", "", 0),
+    "OBD_99319":              ("Tire Status RR", "", 0),
+    "OBD_3155786":            (CH_ENGINE_OIL_TEMP, "C", 2),
+    "OBD_45098826":           ("Ambient Temp", "C", 2),
+    "OBD_1020":               ("Fuel Level", "%", 2),
+    "OBD_10058":              ("Analog 1", "", 2),
+    "OBD_44050250":           ("Digital 42", "", 0),
+    "OBD_44045193":           ("Status Flag 44045193", "", 0),
 }
 
 # ----------------------------------------------------------------------------
