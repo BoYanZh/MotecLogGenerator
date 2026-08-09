@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import datetime
 import struct
+from typing import TYPE_CHECKING
+
+import numpy as np
 
 from ldparser.ldparser import ldChan, ldData, ldEvent, ldHead, ldVehicle, ldVenue
+
+if TYPE_CHECKING:
+    from core.models import Channel, DataLog
 
 
 class MotecLog(object):
