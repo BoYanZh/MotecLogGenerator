@@ -33,6 +33,21 @@ def _mask_interp_gaps(values, times_target, times_src, gap_threshold_ms=1000.0):
 
 from constants import (
     CH_GPS_FIX, CH_LAP_NUMBER,
+    CH_GROUND_SPEED, CH_VEHICLE_SPEED,
+    CH_CG_ACCEL_LAT, CH_CG_ACCEL_LON, CH_CG_ACCEL_LAT_SMOOTH, CH_CG_ACCEL_LON_SMOOTH,
+    CH_GPS_LATITUDE, CH_GPS_LONGITUDE, CH_GPS_HEADING, CH_GPS_ALTITUDE,
+    CH_GPS_SATS, CH_GPS_ACCURACY,
+    CH_RUNNING_TIME, CH_CORR_DIST, CH_DEVICE_BATTERY,
+    CH_THROTTLE_POS, CH_ACCELERATOR_POS,
+    CH_BRAKE_PRESS, CH_BRAKE_POS,
+    CH_ENGINE_RPM, CH_STEERING_ANGLE, CH_COOLANT_TEMP, CH_ENGINE_OIL_TEMP,
+    CH_ENGINE_OIL_PRESS, CH_GEAR, CH_GEARBOX_TEMP, CH_YAW_RATE, CH_LEAN_ANGLE,
+    CH_INTAKE_TEMP, CH_AMBIENT_TEMP, CH_ROLL_ANGLE, CH_PITCH_ANGLE,
+    CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR, CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR,
+    CH_UNDERSTEER_INDEX, CH_G_COMBINED,
+    CH_WHEEL_SPEED_AVG, CH_WHEEL_SPEED_FL, CH_WHEEL_SPEED_FR,
+    CH_WHEEL_SPEED_RL, CH_WHEEL_SPEED_RR,
+    CH_BRAKE_PRESS_FL, CH_BRAKE_PRESS_FR, CH_BRAKE_PRESS_RL, CH_BRAKE_PRESS_RR,
     CHANNEL_ALIASES, DISCRETE_CHANNELS,
     IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP, IBT_BRAKE_PRESS_MAP,
     RCZ_PID_MAP,
@@ -128,7 +143,7 @@ class DataLog(object):
                         return std_rate
 
         # 2. Inspect key physical channels
-        candidates = ["Ground Speed", "GPS Latitude", "Running Time", "CG Accel Lateral", "Engine RPM"]
+        candidates = [CH_GROUND_SPEED, CH_GPS_LATITUDE, CH_RUNNING_TIME, CH_CG_ACCEL_LAT, CH_ENGINE_RPM]
         raw_freq = 0.0
         for name in candidates:
             if name in self.channels and len(self.channels[name].messages) > 1:
@@ -197,17 +212,17 @@ class DataLog(object):
 
         if not traps:
             return []
-        if "GPS Latitude" not in self.channels or "GPS Longitude" not in self.channels:
+        if CH_GPS_LATITUDE not in self.channels or CH_GPS_LONGITUDE not in self.channels:
             return []
 
-        lat_m = self.channels["GPS Latitude"].messages
-        lon_m = self.channels["GPS Longitude"].messages
+        lat_m = self.channels[CH_GPS_LATITUDE].messages
+        lon_m = self.channels[CH_GPS_LONGITUDE].messages
         if not lat_m or not lon_m or len(lat_m) != len(lon_m):
             return []
 
-        spd_m = self.channels.get("Ground Speed")
+        spd_m = self.channels.get(CH_GROUND_SPEED)
         spd_vals = np.array([m.value for m in spd_m.messages]) if spd_m else None
-        hdg_m = self.channels.get("GPS Heading")
+        hdg_m = self.channels.get(CH_GPS_HEADING)
         hdg_vals = np.array([m.value for m in hdg_m.messages]) if hdg_m else None
 
         lat = np.array([m.value for m in lat_m])
@@ -263,10 +278,10 @@ class DataLog(object):
         self._derive_yaw_rate_from_gps_heading()
 
         if g_source == "calc":
-            if "CG Accel Lateral" in self.channels:
-                del self.channels["CG Accel Lateral"]
-            if "CG Accel Longitudinal" in self.channels:
-                del self.channels["CG Accel Longitudinal"]
+            if CH_CG_ACCEL_LAT in self.channels:
+                del self.channels[CH_CG_ACCEL_LAT]
+            if CH_CG_ACCEL_LON in self.channels:
+                del self.channels[CH_CG_ACCEL_LON]
             self._derive_cg_accel_lateral(force=True)
             self._derive_cg_accel_longitudinal(force=True)
         elif g_source == "sensor":
@@ -285,8 +300,8 @@ class DataLog(object):
 
     def _derive_smoothed_accel(self, window_sec=0.5):
         """ Derive 0.5s moving average smoothed G channels for clean G-G diagrams in MoTeC. """
-        for raw_name, smooth_name in [("CG Accel Lateral", "CG Accel Lateral Smooth"),
-                                      ("CG Accel Longitudinal", "CG Accel Long Smooth")]:
+        for raw_name, smooth_name in [(CH_CG_ACCEL_LAT, CH_CG_ACCEL_LAT_SMOOTH),
+                                      (CH_CG_ACCEL_LON, CH_CG_ACCEL_LON_SMOOTH)]:
             if raw_name in self.channels and smooth_name not in self.channels:
                 ch = self.channels[raw_name]
                 if len(ch.messages) < 5:
@@ -305,12 +320,12 @@ class DataLog(object):
                 ]
 
     def _derive_cg_accel_lateral(self, force=False):
-        if not force and "CG Accel Lateral" in self.channels:
+        if not force and CH_CG_ACCEL_LAT in self.channels:
             return
-        if "Ground Speed" not in self.channels or "Chassis Yaw Rate" not in self.channels:
+        if CH_GROUND_SPEED not in self.channels or CH_YAW_RATE not in self.channels:
             return
-        spd_chan = self.channels["Ground Speed"]
-        yaw_chan = self.channels["Chassis Yaw Rate"]
+        spd_chan = self.channels[CH_GROUND_SPEED]
+        yaw_chan = self.channels[CH_YAW_RATE]
         n = len(spd_chan.messages)
         if n < 1:
             return
@@ -318,23 +333,23 @@ class DataLog(object):
         vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
         yr_rad = np.radians([m.value for m in yaw_chan.messages])
         ay = (vx_ms * yr_rad) / 9.80665
-        self.add_channel("CG Accel Lateral", "G", float, 2)
-        self.channels["CG Accel Lateral"].messages = [Message(t_arr[i], ay[i]) for i in range(n)]
+        self.add_channel(CH_CG_ACCEL_LAT, "G", float, 2)
+        self.channels[CH_CG_ACCEL_LAT].messages = [Message(t_arr[i], ay[i]) for i in range(n)]
 
     def _derive_cg_accel_longitudinal(self, force=False):
-        if not force and "CG Accel Longitudinal" in self.channels:
+        if not force and CH_CG_ACCEL_LON in self.channels:
             return
-        if "Ground Speed" not in self.channels:
+        if CH_GROUND_SPEED not in self.channels:
             return
-        spd_chan = self.channels["Ground Speed"]
+        spd_chan = self.channels[CH_GROUND_SPEED]
         n = len(spd_chan.messages)
         if n < 2:
             return
         t_arr = np.array([m.timestamp for m in spd_chan.messages])
         vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
         ax = np.gradient(vx_ms, t_arr) / 9.80665
-        self.add_channel("CG Accel Longitudinal", "G", float, 2)
-        self.channels["CG Accel Longitudinal"].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
+        self.add_channel(CH_CG_ACCEL_LON, "G", float, 2)
+        self.channels[CH_CG_ACCEL_LON].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
 
     _KINEMATICS_STEERING_RATIO = 13.5
     _KINEMATICS_WHEELBASE_M = 2.575
@@ -343,10 +358,10 @@ class DataLog(object):
     _KINEMATICS_LAT_VEL_TAU_S = 2.0
 
     def _calculate_kinematics(self):
-        required = ["Ground Speed", "CG Accel Lateral", "Chassis Yaw Rate"]
+        required = [CH_GROUND_SPEED, CH_CG_ACCEL_LAT, CH_YAW_RATE]
         if not all(r in self.channels for r in required):
             return
-        vx_chan = self.channels["Ground Speed"]
+        vx_chan = self.channels[CH_GROUND_SPEED]
         n = min(len(self.channels[r].messages) for r in required)
         if n < 2:
             return
@@ -354,8 +369,8 @@ class DataLog(object):
         vx = np.array([m.value for m in vx_chan.messages[:n]])
         if vx_chan.units == "km/h":
             vx /= 3.6
-        ay = np.array([m.value * 9.80665 for m in self.channels["CG Accel Lateral"].messages[:n]])
-        yaw_rate_degs = np.array([m.value for m in self.channels["Chassis Yaw Rate"].messages[:n]])
+        ay = np.array([m.value * 9.80665 for m in self.channels[CH_CG_ACCEL_LAT].messages[:n]])
+        yaw_rate_degs = np.array([m.value for m in self.channels[CH_YAW_RATE].messages[:n]])
         yaw_rate = np.radians(yaw_rate_degs * -1.0)
 
         dt = np.zeros(n)
@@ -382,8 +397,8 @@ class DataLog(object):
         slip_f = np.zeros(n)
         slip_r = np.zeros(n)
         steer_rad = np.zeros(n)
-        if "Steering Angle" in self.channels:
-            steer_deg = np.array([m.value for m in self.channels["Steering Angle"].messages])
+        if CH_STEERING_ANGLE in self.channels:
+            steer_deg = np.array([m.value for m in self.channels[CH_STEERING_ANGLE].messages])
             steer_rad = np.radians(steer_deg / ratio)
 
         for i in range(n):
@@ -391,7 +406,7 @@ class DataLog(object):
                 slip_f[i] = np.degrees(steer_rad[i] - np.arctan2(vy[i] + yaw_rate[i] * lf, vx[i]))
                 slip_r[i] = np.degrees(-np.arctan2(vy[i] - yaw_rate[i] * lr, vx[i]))
 
-        for name in ("Tire Slip Angle FL", "Tire Slip Angle FR", "Tire Slip Angle RL", "Tire Slip Angle RR"):
+        for name in (CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR, CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR):
             self.add_channel(name, "deg", float, 2)
             src_data = slip_f if "F" in name else slip_r
             self.channels[name].messages = [Message(time[i], src_data[i]) for i in range(n)]
@@ -400,14 +415,14 @@ class DataLog(object):
         for i in range(n):
             if vx[i] > 5.0:
                 us_index[i] = np.degrees(steer_rad[i]) - np.degrees(wheelbase * yaw_rate[i] / vx[i])
-        self.add_channel("Understeer Index", "deg", float, 2)
-        self.channels["Understeer Index"].messages = [Message(time[i], us_index[i]) for i in range(n)]
+        self.add_channel(CH_UNDERSTEER_INDEX, "deg", float, 2)
+        self.channels[CH_UNDERSTEER_INDEX].messages = [Message(time[i], us_index[i]) for i in range(n)]
 
     def _calculate_g_sum(self):
-        if "CG Accel Longitudinal" not in self.channels or "CG Accel Lateral" not in self.channels:
+        if CH_CG_ACCEL_LON not in self.channels or CH_CG_ACCEL_LAT not in self.channels:
             return
-        ax_msgs = self.channels["CG Accel Longitudinal"].messages
-        ay_msgs = self.channels["CG Accel Lateral"].messages
+        ax_msgs = self.channels[CH_CG_ACCEL_LON].messages
+        ay_msgs = self.channels[CH_CG_ACCEL_LAT].messages
         n = min(len(ax_msgs), len(ay_msgs))
         if n < 2:
             return
@@ -415,13 +430,13 @@ class DataLog(object):
         ax = np.array([ax_msgs[i].value for i in range(n)])
         ay_g = np.array([ay_msgs[i].value for i in range(n)])
         g_sum = np.sqrt(ax ** 2 + ay_g ** 2)
-        self.add_channel("G Force Combined", "G", float, 2)
-        self.channels["G Force Combined"].messages = [Message(time_g[i], g_sum[i]) for i in range(n)]
+        self.add_channel(CH_G_COMBINED, "G", float, 2)
+        self.channels[CH_G_COMBINED].messages = [Message(time_g[i], g_sum[i]) for i in range(n)]
 
     def _derive_brake_pos(self):
-        if "Brake Press" not in self.channels or "Brake Pos" in self.channels:
+        if CH_BRAKE_PRESS not in self.channels or CH_BRAKE_POS in self.channels:
             return
-        press_chan = self.channels["Brake Press"]
+        press_chan = self.channels[CH_BRAKE_PRESS]
         n = len(press_chan.messages)
         if n < 1:
             return
@@ -430,19 +445,19 @@ class DataLog(object):
         if press_chan.units == "bar":
             press_vals *= 100.0
         bpos = np.clip(press_vals / 96.0, 0.0, 100.0)
-        self.add_channel("Brake Pos", "%", float, 2)
-        self.channels["Brake Pos"].messages = [Message(time_p[i], bpos[i]) for i in range(n)]
+        self.add_channel(CH_BRAKE_POS, "%", float, 2)
+        self.channels[CH_BRAKE_POS].messages = [Message(time_p[i], bpos[i]) for i in range(n)]
 
     def _calculate_input_rates(self):
-        self.__calculate_rate("Steering Angle", "deg/s")
-        self.__calculate_rate("Throttle Pos", "%/s")
-        self.__calculate_rate("Brake Pos", "%/s")
+        self.__calculate_rate(CH_STEERING_ANGLE, "deg/s")
+        self.__calculate_rate(CH_THROTTLE_POS, "%/s")
+        self.__calculate_rate(CH_BRAKE_POS, "%/s")
 
     def _mirror_throttle_accel(self):
-        if "Throttle Pos" not in self.channels and "Accelerator Pos" in self.channels:
-            src = self.channels["Accelerator Pos"]
-            self.add_channel("Throttle Pos", "%", float, 2)
-            self.channels["Throttle Pos"].messages = [Message(m.timestamp, m.value) for m in src.messages]
+        if CH_THROTTLE_POS not in self.channels and CH_ACCELERATOR_POS in self.channels:
+            src = self.channels[CH_ACCELERATOR_POS]
+            self.add_channel(CH_THROTTLE_POS, "%", float, 2)
+            self.channels[CH_THROTTLE_POS].messages = [Message(m.timestamp, m.value) for m in src.messages]
 
     def __calculate_rate(self, channel_name, unit):
         """ Internal helper to calculate the rate of change for a channel. """
@@ -462,9 +477,9 @@ class DataLog(object):
             self.channels[new_name].messages = [Message(times[i], rate[i]) for i in range(len(times))]
 
     def _derive_yaw_rate_from_gps_heading(self):
-        if "Chassis Yaw Rate" in self.channels:
+        if CH_YAW_RATE in self.channels:
             return
-        gps_h_chan = self.channels.get("GPS Heading")
+        gps_h_chan = self.channels.get(CH_GPS_HEADING)
         if not gps_h_chan or len(gps_h_chan.messages) < 2:
             return
         times = np.array([m.timestamp for m in gps_h_chan.messages])
@@ -477,15 +492,15 @@ class DataLog(object):
         if len(yaw_rate_val) >= w and w > 1:
             padded = np.pad(yaw_rate_val, (w // 2, w - 1 - w // 2), mode="edge")
             yaw_rate_val = np.mean(np.lib.stride_tricks.sliding_window_view(padded, w), axis=1)[:len(yaw_rate_val)]
-        spd_chan = self.channels.get("Ground Speed")
+        spd_chan = self.channels.get(CH_GROUND_SPEED)
         if spd_chan and len(spd_chan.messages) == len(times):
             v_vals = np.array([m.value for m in spd_chan.messages])
             if spd_chan.units == "mph":
                 v_vals *= 1.60934
             yaw_rate_val[v_vals < 5.0] = 0.0
         yaw_rate_val = np.clip(yaw_rate_val, -150.0, 150.0)
-        self.add_channel("Chassis Yaw Rate", "deg/s", float, 2)
-        self.channels["Chassis Yaw Rate"].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
+        self.add_channel(CH_YAW_RATE, "deg/s", float, 2)
+        self.channels[CH_YAW_RATE].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
 
     def _extract_datetime_from_text(self, log_lines, file_path=""):
         import datetime
@@ -734,8 +749,6 @@ class DataLog(object):
             for name in invalid_channels:
                 del channel_dict[name]
                 del self.channels[name]
-            if invalid_channels:
-                channel_dict = {name: idx for idx, name in enumerate(channel_dict)}
 
     def from_racechrono_log(self, log_lines, target_lap=None):
         """ Creates channels populated with messages from a RaceChrono CSV log file.
@@ -794,68 +807,68 @@ class DataLog(object):
 
         # Base mapping from typical RaceChrono / AiM / MoTeC columns to MoTeC terminology and units.
         rc_to_motec_map = {
-            "lap_number": {"name": "Lap Number", "units": ""},
-            "elapsed_time": {"name": "Running Time", "units": "s"},
-            "distance_traveled": {"name": "Corr Dist", "units": "m"},
-            "accuracy": {"name": "GPS Accuracy", "units": "m"},
-            "altitude": {"name": "GPS Altitude", "units": "m"},
-            "bearing": {"name": "GPS Heading", "units": "deg"},
-            "device_battery_level": {"name": "Device Battery", "units": "%"},
+            "lap_number": {"name": CH_LAP_NUMBER, "units": ""},
+            "elapsed_time": {"name": CH_RUNNING_TIME, "units": "s"},
+            "distance_traveled": {"name": CH_CORR_DIST, "units": "m"},
+            "accuracy": {"name": CH_GPS_ACCURACY, "units": "m"},
+            "altitude": {"name": CH_GPS_ALTITUDE, "units": "m"},
+            "bearing": {"name": CH_GPS_HEADING, "units": "deg"},
+            "device_battery_level": {"name": CH_DEVICE_BATTERY, "units": "%"},
             "fix_type": {"name": CH_GPS_FIX, "units": ""},
-            "latitude": {"name": "GPS Latitude", "units": "deg"},
-            "longitude": {"name": "GPS Longitude", "units": "deg"},
-            "satellites": {"name": "GPS Satellites", "units": ""},
-            "speed": {"name": "Ground Speed", "units": "km/h"},
-            "combined_acc": {"name": "G Force Combined", "units": "G"},
-            "lateral_acc": {"name": "CG Accel Lateral", "units": "G"},
-            "lean_angle": {"name": "Lean Angle", "units": "deg"},
-            "longitudinal_acc": {"name": "CG Accel Longitudinal", "units": "G"},
-            "accelerator_pos": {"name": "Throttle Pos", "units": "%"},
-            "brake_pos": {"name": "Brake Pos", "units": "%"},
-            "brake_pressure": {"name": "Brake Press", "units": "kPa"},
-            "coolant_temp": {"name": "Coolant Temp", "units": "C"},
-            "engine_oil_temp": {"name": "Engine Oil Temp", "units": "C"},
-            "rpm": {"name": "Engine RPM", "units": "rpm"},
-            "steering_angle": {"name": "Steering Angle", "units": "deg"},
-            "yaw_rate": {"name": "Chassis Yaw Rate", "units": "deg/s"},
-            "gear": {"name": "Gear", "units": ""},
-            "gear_position": {"name": "Gear", "units": ""},
+            "latitude": {"name": CH_GPS_LATITUDE, "units": "deg"},
+            "longitude": {"name": CH_GPS_LONGITUDE, "units": "deg"},
+            "satellites": {"name": CH_GPS_SATS, "units": ""},
+            "speed": {"name": CH_GROUND_SPEED, "units": "km/h"},
+            "combined_acc": {"name": CH_G_COMBINED, "units": "G"},
+            "lateral_acc": {"name": CH_CG_ACCEL_LAT, "units": "G"},
+            "lean_angle": {"name": CH_LEAN_ANGLE, "units": "deg"},
+            "longitudinal_acc": {"name": CH_CG_ACCEL_LON, "units": "G"},
+            "accelerator_pos": {"name": CH_THROTTLE_POS, "units": "%"},
+            "brake_pos": {"name": CH_BRAKE_POS, "units": "%"},
+            "brake_pressure": {"name": CH_BRAKE_PRESS, "units": "kPa"},
+            "coolant_temp": {"name": CH_COOLANT_TEMP, "units": "C"},
+            "engine_oil_temp": {"name": CH_ENGINE_OIL_TEMP, "units": "C"},
+            "rpm": {"name": CH_ENGINE_RPM, "units": "rpm"},
+            "steering_angle": {"name": CH_STEERING_ANGLE, "units": "deg"},
+            "yaw_rate": {"name": CH_YAW_RATE, "units": "deg/s"},
+            "gear": {"name": CH_GEAR, "units": ""},
+            "gear_position": {"name": CH_GEAR, "units": ""},
             # AiM Solo / RaceStudio CSV Mappings
-            "gps speed": {"name": "Ground Speed", "units": "km/h"},
-            "gps latacc": {"name": "CG Accel Lateral", "units": "G"},
-            "gps lonacc": {"name": "CG Accel Longitudinal", "units": "G"},
-            "gps gyro": {"name": "Chassis Yaw Rate", "units": "deg/s"},
-            "gps lat": {"name": "GPS Latitude", "units": "deg"},
-            "gps lon": {"name": "GPS Longitude", "units": "deg"},
-            "gps altitude": {"name": "GPS Altitude", "units": "m"},
-            "gps heading": {"name": "GPS Heading", "units": "deg"},
-            "gps posaccuracy": {"name": "GPS Accuracy", "units": "m"},
-            "pps": {"name": "Throttle Pos", "units": "%"},
-            "steerangle": {"name": "Steering Angle", "units": "deg"},
-            "brakepress": {"name": "Brake Press", "units": "kPa"},
-            "oiltemp": {"name": "Engine Oil Temp", "units": "C"},
-            "ect": {"name": "Coolant Temp", "units": "C"},
-            "intake air temp": {"name": "Intake Temp", "units": "C"},
-            "oilpressure0": {"name": "Engine Oil Press", "units": "kPa"},
-            "yawrate": {"name": "Chassis Yaw Rate", "units": "deg/s"},
-            "wheelspeedfl": {"name": "Wheel Speed FL", "units": "km/h"},
-            "wheelspeedfr": {"name": "Wheel Speed FR", "units": "km/h"},
-            "wheelspeedrl": {"name": "Wheel Speed RL", "units": "km/h"},
-            "wheelspeedrr": {"name": "Wheel Speed RR", "units": "km/h"},
-            "speedv": {"name": "Vehicle Speed", "units": "km/h"},
+            "gps speed": {"name": CH_GROUND_SPEED, "units": "km/h"},
+            "gps latacc": {"name": CH_CG_ACCEL_LAT, "units": "G"},
+            "gps lonacc": {"name": CH_CG_ACCEL_LON, "units": "G"},
+            "gps gyro": {"name": CH_YAW_RATE, "units": "deg/s"},
+            "gps lat": {"name": CH_GPS_LATITUDE, "units": "deg"},
+            "gps lon": {"name": CH_GPS_LONGITUDE, "units": "deg"},
+            "gps altitude": {"name": CH_GPS_ALTITUDE, "units": "m"},
+            "gps heading": {"name": CH_GPS_HEADING, "units": "deg"},
+            "gps posaccuracy": {"name": CH_GPS_ACCURACY, "units": "m"},
+            "pps": {"name": CH_THROTTLE_POS, "units": "%"},
+            "steerangle": {"name": CH_STEERING_ANGLE, "units": "deg"},
+            "brakepress": {"name": CH_BRAKE_PRESS, "units": "kPa"},
+            "oiltemp": {"name": CH_ENGINE_OIL_TEMP, "units": "C"},
+            "ect": {"name": CH_COOLANT_TEMP, "units": "C"},
+            "intake air temp": {"name": CH_INTAKE_TEMP, "units": "C"},
+            "oilpressure0": {"name": CH_ENGINE_OIL_PRESS, "units": "kPa"},
+            "yawrate": {"name": CH_YAW_RATE, "units": "deg/s"},
+            "wheelspeedfl": {"name": CH_WHEEL_SPEED_FL, "units": "km/h"},
+            "wheelspeedfr": {"name": CH_WHEEL_SPEED_FR, "units": "km/h"},
+            "wheelspeedrl": {"name": CH_WHEEL_SPEED_RL, "units": "km/h"},
+            "wheelspeedrr": {"name": CH_WHEEL_SPEED_RR, "units": "km/h"},
+            "speedv": {"name": CH_VEHICLE_SPEED, "units": "km/h"},
             # MoTeC CSV Mappings
-            "corr speed": {"name": "Ground Speed", "units": "km/h"},
-            "gps latitude": {"name": "GPS Latitude", "units": "deg"},
-            "gps longitude": {"name": "GPS Longitude", "units": "deg"},
-            "corr dist": {"name": "Corr Dist", "units": "m"},
+            "corr speed": {"name": CH_GROUND_SPEED, "units": "km/h"},
+            "gps latitude": {"name": CH_GPS_LATITUDE, "units": "deg"},
+            "gps longitude": {"name": CH_GPS_LONGITUDE, "units": "deg"},
+            "corr dist": {"name": CH_CORR_DIST, "units": "m"},
         }
 
         # Fallback for yaw rate if not named "yaw_rate" or "gps gyro"
         if not has_yaw:
             if "z_rate_of_rotation" in channel_names:
-                rc_to_motec_map["z_rate_of_rotation"] = {"name": "Chassis Yaw Rate", "units": "deg/s"}
+                rc_to_motec_map["z_rate_of_rotation"] = {"name": CH_YAW_RATE, "units": "deg/s"}
             elif "y_rate_of_rotation" in channel_names:
-                rc_to_motec_map["y_rate_of_rotation"] = {"name": "Chassis Yaw Rate", "units": "deg/s"}
+                rc_to_motec_map["y_rate_of_rotation"] = {"name": CH_YAW_RATE, "units": "deg/s"}
 
         # Explicitly ignore uncalibrated raw IMU channels
         ignored_columns = {"x_acc", "y_acc", "z_acc"}
@@ -958,13 +971,13 @@ class DataLog(object):
                         val *= 3.6
                     elif unit_lower == "mph":
                         val *= 1.60934
-                    elif unit_lower == "psi" and name == "Brake Press":
+                    elif unit_lower == "psi" and name == CH_BRAKE_PRESS:
                         val *= 6.89476
                     elif unit_lower == "f":
                         val = (val - 32.0) * (5.0 / 9.0)
                     elif unit_lower == "bar" and "press" in name.lower():
                         val *= 100.0
-                    elif raw_lower in ("yaw_rate", "z_rate_of_rotation", "y_rate_of_rotation") and name == "Chassis Yaw Rate":
+                    elif raw_lower in ("yaw_rate", "z_rate_of_rotation", "y_rate_of_rotation") and name == CH_YAW_RATE:
                         val *= -1.0
 
                     message = Message(t, val)
@@ -1548,15 +1561,15 @@ class DataLog(object):
 
         mapping = {
             "Time": ("Time", "s", 3),
-            "GPS Latitude": ("GPS Latitude", "deg", 7),
-            "GPS Longitude": ("GPS Longitude", "deg", 7),
-            "GPS Speed": ("Ground Speed", "km/h", 5),  # Convert m/s -> km/h
-            "GPS Heading": ("GPS Heading", "deg", 3),
-            "GPS Altitude": ("GPS Altitude", "m", 3),
+            CH_GPS_LATITUDE: (CH_GPS_LATITUDE, "deg", 7),
+            CH_GPS_LONGITUDE: (CH_GPS_LONGITUDE, "deg", 7),
+            "GPS Speed": (CH_GROUND_SPEED, "km/h", 5),  # Convert m/s -> km/h
+            CH_GPS_HEADING: (CH_GPS_HEADING, "deg", 3),
+            CH_GPS_ALTITUDE: (CH_GPS_ALTITUDE, "m", 3),
             # Lap count column - added by PB Buddy on request (Timur, 2026-08)
-            "Lap Count": ("Lap Number", "", 0),
-            "Lap": ("Lap Number", "", 0),
-            "Lap Number": ("Lap Number", "", 0),
+            "Lap Count": (CH_LAP_NUMBER, "", 0),
+            "Lap": (CH_LAP_NUMBER, "", 0),
+            CH_LAP_NUMBER: (CH_LAP_NUMBER, "", 0),
         }
 
         chan_indices = {}
@@ -1627,9 +1640,6 @@ class DataLog(object):
             _ACCEL_LAT        = "channel_2_201_0_10_0"
             _ACCEL_LONG       = "channel_2_201_0_9_0"
             _ACCEL_Z          = "channel_2_201_0_11_0"
-            _GYRO_Z           = "channel_3_202_0_14_0"
-            _GYRO_X           = "channel_3_202_0_12_0"
-            _OBD_DEV12_PFX    = "channel_12_100_"
             _OBD_DEV4_TS_KEY  = "channel_4_101_0_1_1"
 
             if "session.json" not in all_names:
@@ -1862,9 +1872,9 @@ class DataLog(object):
                 self.channels[name].messages = [Message(sample_times[i], filtered_vals[i]) for i in range(len(sample_times))]
 
             # Lap Number Channel
-            populate_channel("Lap Number", "", lap_numbers, 0)
+            populate_channel(CH_LAP_NUMBER, "", lap_numbers, 0)
             # Running Time Channel
-            populate_channel("Running Time", "s", times_sec, 2)
+            populate_channel(CH_RUNNING_TIME, "s", times_sec, 2)
 
             # Auto-detect GPS device prefix (type 200 = external VBOX, type 100 = phone GPS)
             gps_prefix = None
@@ -1879,7 +1889,7 @@ class DataLog(object):
                 if _spd_key in namelist:
                     raw_spd = np.frombuffer(read_channel(_spd_key), dtype="<i4")
                     if len(raw_spd) >= n_samples:
-                        populate_channel("Ground Speed", "km/h", (raw_spd / 1000.0) * 3.6, 2)
+                        populate_channel(CH_GROUND_SPEED, "km/h", (raw_spd / 1000.0) * 3.6, 2)
 
                 # 3. Parse Latitude & Longitude
                 _ll_key = gps_prefix + "3_1"
@@ -1887,22 +1897,22 @@ class DataLog(object):
                     raw_ll = np.frombuffer(read_channel(_ll_key), dtype="<i4")
                     if len(raw_ll) >= n_samples * 2:
                         raw_ll = raw_ll[:n_samples * 2].reshape(-1, 2)
-                        populate_channel("GPS Latitude", "deg", raw_ll[:, 0] / 6000000.0, 7)
-                        populate_channel("GPS Longitude", "deg", raw_ll[:, 1] / 6000000.0, 7)
+                        populate_channel(CH_GPS_LATITUDE, "deg", raw_ll[:, 0] / 6000000.0, 7)
+                        populate_channel(CH_GPS_LONGITUDE, "deg", raw_ll[:, 1] / 6000000.0, 7)
 
                 # 4. Parse Altitude
                 _alt_key = gps_prefix + "5_0"
                 if _alt_key in namelist:
                     raw_alt = np.frombuffer(read_channel(_alt_key), dtype="<i4")
                     if len(raw_alt) >= n_samples:
-                        populate_channel("GPS Altitude", "m", raw_alt / 1000.0)
+                        populate_channel(CH_GPS_ALTITUDE, "m", raw_alt / 1000.0)
 
                 # 5. Parse GPS Heading
                 _hdg_key = gps_prefix + "6_0"
                 if _hdg_key in namelist:
                     raw_hdg = np.frombuffer(read_channel(_hdg_key), dtype="<i4")
                     if len(raw_hdg) >= n_samples:
-                        populate_channel("GPS Heading", "deg", raw_hdg / 1000.0)
+                        populate_channel(CH_GPS_HEADING, "deg", raw_hdg / 1000.0)
 
             # 6. Parse Accelerations (device 2, type 201)
             # If a per-device timestamp file exists, resample onto GPS time grid using
@@ -1934,17 +1944,24 @@ class DataLog(object):
                     # Fallback: naive truncation (off by  1 sample)
                     populate_channel(out_name, units, raw, decimals)
 
-            _parse_imu_channel(_ACCEL_LAT,  "CG Accel Lateral",     "G",     -1.0 / 10000.0)
-            _parse_imu_channel(_ACCEL_LONG, "CG Accel Longitudinal", "G",     1.0 / 10000.0)
-            _parse_imu_channel(_ACCEL_Z,    "Lean Angle",            "deg",   1.0 / 10000.0)
+            _parse_imu_channel(_ACCEL_LAT,  CH_CG_ACCEL_LAT,     "G",     -1.0 / 10000.0)
+            _parse_imu_channel(_ACCEL_LONG, CH_CG_ACCEL_LON, "G",     1.0 / 10000.0)
+            _parse_imu_channel(_ACCEL_Z,    CH_LEAN_ANGLE,            "deg",   1.0 / 10000.0)
 
-            # 7. Parse Gyroscope / Yaw Rate (device 3, type 202)
-            if _GYRO_Z in namelist:
-                _parse_imu_channel(_GYRO_Z, "Chassis Yaw Rate", "deg/s",
-                                   -1.0 / 1000.0, ts_key=_GYRO_TS_KEY)
-            elif _GYRO_X in namelist:
-                _parse_imu_channel(_GYRO_X, "x_rate_of_rotation", "",
-                                   1.0 / 1000.0, ts_key=_GYRO_TS_KEY)
+            # 7. Parse Gyroscope / Yaw Rate (device 3, type 302 / 202 / 102)
+            gyro_z_file = None
+            gyro_ts_file = None
+            for g_type in ("302", "202", "102"):
+                gz_cand = f"channel_3_{g_type}_0_14_0"
+                ts_cand = f"channel_3_{g_type}_0_1_1"
+                if gz_cand in namelist:
+                    gyro_z_file = gz_cand
+                    gyro_ts_file = ts_cand
+                    break
+
+            if gyro_z_file:
+                _parse_imu_channel(gyro_z_file, CH_YAW_RATE, "deg/s",
+                                   -1.0 / 1000.0, ts_key=gyro_ts_file)
 
             # 8. Parse OBD-II / CAN Channels
             # RCZ stores binary channel values as contiguous IEEE 754 float64 (double precision) values.
@@ -1954,13 +1971,16 @@ class DataLog(object):
 
             for name in namelist:
                 base_fname = os.path.basename(name)
-                if not base_fname.startswith(_OBD_DEV12_PFX) or not base_fname.endswith("_1_1"):
+                if not (base_fname.startswith("channel_12_") or base_fname.startswith("channel2_12_")) or not base_fname.endswith("_1_1"):
                     continue
                 parts = base_fname.split("_")
+                if len(parts) < 4:
+                    continue
+                dev_sub = parts[2]
                 pid = parts[3]
                 raw_time_data = np.frombuffer(read_channel(name), dtype="<i4")
                 dir_prefix = os.path.dirname(name)
-                companion_fname = f"channel2_12_100_{pid}_{pid}_3"
+                companion_fname = f"channel2_12_{dev_sub}_{pid}_{pid}_3"
                 companion = (dir_prefix + "/" + companion_fname) if dir_prefix else companion_fname
                 if companion not in namelist or len(raw_time_data) < 2 or len(raw_time_data) % 2:
                     continue
@@ -1999,7 +2019,7 @@ class DataLog(object):
             _G = 9.80665
             rcz_dev4_pid_overrides = {
                 # PID 7 on device 4 = phone lateral accelerometer (m/s^2), NOT ECU Roll Angle
-                "7":  ("CG Accel Lateral",     "G",    1.0 / _G, 0.0),
+                "7":  (CH_CG_ACCEL_LAT,     "G",    1.0 / _G, 0.0),
                 # PID 8 on device 4 = phone vertical accelerometer (m/s^2, includes gravity) - skip
                 "8":  None,
             }
