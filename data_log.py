@@ -37,17 +37,26 @@ from constants import (
     IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP, IBT_BRAKE_PRESS_MAP,
 )
 
-def _parse_vbo_latlon(val_str):
-    sign = -1.0 if val_str.startswith("-") else 1.0
-    val_str = val_str.lstrip("+-")
-    dot_idx = val_str.find(".")
-    if dot_idx < 0:
+TRACK_BEACONS = {
+    "WeatherTech Raceway Laguna Seca": {"lat": 36.58646300, "lon": -121.75664133, "heading_deg": 215.0, "name": "Start/Finish"},
+    "Sonoma Raceway": {"lat": 38.16146533, "lon": -122.45478067, "heading_deg": 309.0, "name": "Start/Finish"},
+    "Thunderhill East Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill East Cyclone": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill 5 Mile Double Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill 5 Mile Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "Thunderhill 5 Mile Full": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+}
+
+def _parse_vbo_latlon(val_str, is_lon=False):
+    try:
+        val_s = str(val_str).strip()
+        sign = -1.0 if val_s.startswith("-") else 1.0
+        val = float(val_s.lstrip("+-")) / 60.0
+        if is_lon and sign > 0 and val > 50.0:
+            sign = -1.0
+        return sign * val
+    except Exception:
         return 0.0
-    deg_str = val_str[:dot_idx - 2]
-    min_str = val_str[dot_idx - 2:]
-    deg = float(deg_str) if deg_str else 0.0
-    minutes = float(min_str)
-    return sign * (deg + minutes / 60.0)
 
 
 def _parse_vbo_time(val_str):
@@ -167,9 +176,18 @@ class DataLog(object):
             self.channels[channel_name].resample(start, end, frequency, mask_interp_gaps=mask_interp_gaps)
         return frequency
 
-    def detect_beacons(self, min_speed_kmh=30.0, min_time_sec=15.0):
+    def detect_beacons(self, min_speed_kmh=30.0, min_time_sec=15.0, min_lap_sec=40.0):
         """ Detects trap / sector crossing timestamps from GPS coordinates and traps metadata. """
-        if not getattr(self, "traps", None):
+        traps = list(getattr(self, "traps", []) or [])
+
+        if not traps:
+            venue = self.metadata.get("venue_name", "")
+            for k, v in TRACK_BEACONS.items():
+                if k.lower() in venue.lower():
+                    traps = [v]
+                    break
+
+        if not traps:
             return []
         if "GPS Latitude" not in self.channels or "GPS Longitude" not in self.channels:
             return []
@@ -181,6 +199,8 @@ class DataLog(object):
 
         spd_m = self.channels.get("Ground Speed")
         spd_vals = np.array([m.value for m in spd_m.messages]) if spd_m else None
+        hdg_m = self.channels.get("GPS Heading")
+        hdg_vals = np.array([m.value for m in hdg_m.messages]) if hdg_m else None
 
         lat = np.array([m.value for m in lat_m])
         lon = np.array([m.value for m in lon_m])
@@ -188,26 +208,39 @@ class DataLog(object):
         dur = self.duration()
 
         beacons = []
-        for t in self.traps:
+        for t in traps:
             t_lat = t["lat"]
             t_lon = t["lon"]
-            t_name = t["name"]
+            t_name = t.get("name", "Start/Finish")
+            t_hdg = t.get("heading_deg", None)
 
             # Flat earth distance approximation (meters around ~35-45 deg lat)
             d_lat = (lat - t_lat) * 111000.0
-            d_lon = (lon - t_lon) * 86000.0
+            d_lon = (lon - t_lon) * 85670.0
             dist = np.sqrt(d_lat**2 + d_lon**2)
 
+            cand_indices = []
             for i in range(1, len(dist) - 1):
-                # Speed & boundary guards: ignore false crossings while stationary/pitting
-                # or near session start/end
+                if dist[i] > 25.0:
+                    continue
                 if spd_vals is not None and spd_vals[i] < min_speed_kmh:
                     continue
                 if times[i] < min_time_sec or (dur > 0 and (dur - times[i]) < 5.0):
                     continue
+                if t_hdg is not None and hdg_vals is not None:
+                    ang_diff = np.abs((hdg_vals[i] - t_hdg + 180) % 360 - 180)
+                    if ang_diff > 35.0:
+                        continue
 
-                if dist[i] < 30.0 and dist[i] <= dist[i - 1] and dist[i] <= dist[i + 1]:
-                    beacons.append((float(times[i]), t_name))
+                if dist[i] <= dist[i - 1] and dist[i] <= dist[i + 1]:
+                    cand_indices.append(i)
+
+            last_t = -999.0
+            for idx in cand_indices:
+                t_val = times[idx]
+                if t_val - last_t >= min_lap_sec:
+                    beacons.append((float(t_val), t_name))
+                    last_t = t_val
 
         beacons.sort(key=lambda x: x[0])
         return beacons
@@ -1390,10 +1423,11 @@ class DataLog(object):
         for idx, col_name in enumerate(cols_raw):
             if col_name in CHANNEL_ALIASES:
                 out_name, unit, dec = CHANNEL_ALIASES[col_name]
-                fn = _parse_vbo_latlon if col_name in ("lat", "long") else float
                 if out_name not in self.channels:
                     self.add_channel(out_name, unit, float, dec)
-                col_idx_map[idx] = (out_name, fn)
+                is_latlon = col_name in ("lat", "long")
+                is_lon = (col_name == "long")
+                col_idx_map[idx] = (out_name, is_latlon, is_lon)
 
         t0 = None
         for line_s in data_lines:
@@ -1405,9 +1439,13 @@ class DataLog(object):
                 t_rel = t_sec - t0
                 if t_rel < 0:
                     t_rel += 86400.0  # Handle midnight wrapping
-                for idx, (out_name, fn) in col_idx_map.items():
+                for idx, (out_name, is_latlon, is_lon) in col_idx_map.items():
                     try:
-                        v_val = fn(parts[idx])
+                        val_str = parts[idx]
+                        if is_latlon:
+                            v_val = _parse_vbo_latlon(val_str, is_lon=is_lon)
+                        else:
+                            v_val = float(val_str)
                         self.channels[out_name].messages.append(Message(t_rel, v_val))
                     except ValueError:
                         pass

@@ -61,12 +61,9 @@ def _normalize_venue(name):
 
         if "cyclone" in s_lower:
             return "Thunderhill East Cyclone"
-        if "bypass" in s_lower or "by" in s_lower:
-            return "Thunderhill East Bypass"
-        if "east" in s_lower:
-            return "Thunderhill East"
 
-        return "Thunderhill Raceway Park"
+        # If not cyclone/west/5mile, default to Thunderhill East Bypass
+        return "Thunderhill East Bypass"
 
     # 2. Buttonwillow Raceway Park variants
     if "buttonwillow" in s_lower or "bwc" in s_lower:
