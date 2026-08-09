@@ -395,6 +395,28 @@ def pytest_if_available():
         return None
 
 
+# ---------------------------------------------------------------------------
+# Regression: from_csv_log must not delete channels right of a non-numeric column
+# (previously the channel_dict index remapping broke column lookup)
+# ---------------------------------------------------------------------------
+def test_csv_middle_non_numeric_column_keeps_right_columns():
+    log = DataLog()
+    lines = [
+        "time,colA,colB,colC\n",
+        "0.0,1.0,XXX,100.0\n",
+        "0.1,2.0,YYY,200.0\n",
+        "0.2,3.0,ZZZ,300.0\n",
+    ]
+    log.from_csv_log(lines)
+    assert "colA" in log.channels
+    assert "colC" in log.channels
+    assert "colB" not in log.channels
+    colC = log.channels["colC"].messages
+    assert len(colC) == 3, f"colC messages: {len(colC)}"
+    assert colC[-1].value == 300.0
+
+
+
 if __name__ == "__main__":
     # Run all test_* functions directly without pytest
     import traceback

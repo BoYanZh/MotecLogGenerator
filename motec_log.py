@@ -5,6 +5,7 @@ import struct
 
 import numpy as np
 
+from constants import CH_GPS_ALTITUDE, CH_GPS_LATITUDE, CH_GPS_LONGITUDE, CH_GROUND_SPEED
 from data_log import Channel, DataLog, Message
 from ldparser.ldparser import ldChan, ldData, ldEvent, ldHead, ldVehicle, ldVenue
 
@@ -230,8 +231,8 @@ class MotecLog(object):
 
     @staticmethod
     def _find_gps_channels(data_log):
-        lat = data_log.channels.get("GPS Latitude") or data_log.channels.get("Real GPS Latitude")
-        lon = data_log.channels.get("GPS Longitude") or data_log.channels.get("Real GPS Longitude")
+        lat = data_log.channels.get(CH_GPS_LATITUDE) or data_log.channels.get("Real GPS Latitude")
+        lon = data_log.channels.get(CH_GPS_LONGITUDE) or data_log.channels.get("Real GPS Longitude")
         return lat, lon
 
     @staticmethod
@@ -249,8 +250,8 @@ class MotecLog(object):
         n = min(len(lat_chan.messages), len(lon_chan.messages))
         if n == 0:
             return
-        alt_chan = data_log.channels.get("GPS Altitude")
-        spd_chan = data_log.channels.get("Ground Speed")
+        alt_chan = data_log.channels.get(CH_GPS_ALTITUDE)
+        spd_chan = data_log.channels.get(CH_GROUND_SPEED)
         step = MotecLog._downsample_step(lat_chan, target_hz)
         for i in range(0, n, step):
             lat = lat_chan.messages[i].value

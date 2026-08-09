@@ -501,6 +501,7 @@ class DataLog(object):
         yaw_rate_val = np.clip(yaw_rate_val, -150.0, 150.0)
         self.add_channel(CH_YAW_RATE, "deg/s", float, 2)
         self.channels[CH_YAW_RATE].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
+        self.metadata["yaw_rate_source"] = "gps_heading_derivative"
 
     def _extract_datetime_from_text(self, log_lines, file_path=""):
         import datetime
@@ -1629,17 +1630,23 @@ class DataLog(object):
                 return z.read(prefix + name)
 
             # RCZ binary channel naming conventions (RaceChrono internal format).
-            # Device numbers encode the sensor type:
-            #   1/200 = external GPS (RaceBox/VBOX),    1/100 = phone GPS
-            #   2/201 = dedicated accelerometer
-            #   3/202 = gyroscope
+            # The second device identifier varies with the RaceChrono hardware
+            # model.  Discover the known GPS/IMU variants instead of assuming
+            # that every archive uses the 200-series identifiers.
+            #   1/300, 1/200, 1/100 = GPS
+            #   2/301, 2/201, 2/101 = accelerometer
+            #   3/302, 3/202, 3/102 = gyroscope
             #   4/101 = phone IMU / secondary OBD
-            #   12/100 = primary OBD (car ECU via CAN)
-            _GPS_DEV_PFX      = ("channel_1_200_0_", "channel_1_100_0_")
-            _GPS_TS_KEYS      = ("channel_1_200_0_1_1", "channel_1_200_0_2_1")
-            _ACCEL_LAT        = "channel_2_201_0_10_0"
-            _ACCEL_LONG       = "channel_2_201_0_9_0"
-            _ACCEL_Z          = "channel_2_201_0_11_0"
+            #   12/* = primary OBD (car ECU via CAN)
+            _GPS_DEV_PFX = tuple(
+                f"channel_1_{device_type}_0_"
+                for device_type in ("300", "200", "100")
+            )
+            _GPS_TS_KEYS = tuple(
+                f"channel_1_{device_type}_0_{timestamp_channel}_1"
+                for device_type in ("300", "200", "100")
+                for timestamp_channel in ("1", "2")
+            )
             _OBD_DEV4_TS_KEY  = "channel_4_101_0_1_1"
 
             if "session.json" not in all_names:
@@ -1919,9 +1926,6 @@ class DataLog(object):
             # np.interp.  This corrects for slight rate drift (e.g. IMU at 25.008 Hz vs
             # GPS at 25.000 Hz) which accumulates to 48-sample / 1.9 s error over a
             # 1115 s session, causing a measurable lag in the exported data.
-            _IMU_TS_KEY  = "channel_2_201_0_1_1"
-            _GYRO_TS_KEY = "channel_3_202_0_1_1"
-
             def _imu_times(ts_key):
                 """Return relative time array (seconds, vs stint_uptime_start) for a device ts file."""
                 if ts_key not in namelist:
@@ -1929,7 +1933,9 @@ class DataLog(object):
                 raw = np.frombuffer(read_channel(ts_key), dtype="<i4")
                 return (raw[::2].astype(np.float64) - stint_uptime_start) / 1000.0
 
-            def _parse_imu_channel(ch_key, out_name, units, scale, decimals=2, ts_key=_IMU_TS_KEY):
+            def _parse_imu_channel(
+                ch_key, out_name, units, scale, decimals=2, ts_key=None
+            ):
                 if ch_key not in namelist:
                     return
                 raw = np.frombuffer(read_channel(ch_key), dtype="<i4").astype(np.float64) * scale
@@ -1944,9 +1950,41 @@ class DataLog(object):
                     # Fallback: naive truncation (off by  1 sample)
                     populate_channel(out_name, units, raw, decimals)
 
-            _parse_imu_channel(_ACCEL_LAT,  CH_CG_ACCEL_LAT,     "G",     -1.0 / 10000.0)
-            _parse_imu_channel(_ACCEL_LONG, CH_CG_ACCEL_LON, "G",     1.0 / 10000.0)
-            _parse_imu_channel(_ACCEL_Z,    CH_LEAN_ANGLE,            "deg",   1.0 / 10000.0)
+            accel_type = next(
+                (
+                    device_type
+                    for device_type in ("301", "201", "101")
+                    if f"channel_2_{device_type}_0_10_0" in namelist
+                ),
+                None,
+            )
+            if accel_type is not None:
+                accel_prefix = f"channel_2_{accel_type}_0_"
+                accel_ts_file = accel_prefix + "1_1"
+                _parse_imu_channel(
+                    accel_prefix + "10_0",
+                    CH_CG_ACCEL_LAT,
+                    "G",
+                    1.0 / 10000.0,
+                    ts_key=accel_ts_file,
+                )
+                _parse_imu_channel(
+                    accel_prefix + "9_0",
+                    CH_CG_ACCEL_LON,
+                    "G",
+                    1.0 / 10000.0,
+                    ts_key=accel_ts_file,
+                )
+                _parse_imu_channel(
+                    accel_prefix + "11_0",
+                    CH_LEAN_ANGLE,
+                    "deg",
+                    1.0 / 10000.0,
+                    ts_key=accel_ts_file,
+                )
+                self.metadata["lateral_accel_source"] = (
+                    f"rcz_accelerometer_2_{accel_type}"
+                )
 
             # 7. Parse Gyroscope / Yaw Rate (device 3, type 302 / 202 / 102)
             gyro_z_file = None
@@ -1961,15 +1999,17 @@ class DataLog(object):
 
             if gyro_z_file:
                 _parse_imu_channel(gyro_z_file, CH_YAW_RATE, "deg/s",
-                                   -1.0 / 1000.0, ts_key=gyro_ts_file)
+                                   1.0 / 1000.0, ts_key=gyro_ts_file)
+                self.metadata["yaw_rate_source"] = f"rcz_gyro_3_{g_type}"
 
             # 8. Parse OBD-II / CAN Channels
             # RCZ stores binary channel values as contiguous IEEE 754 float64 (double precision) values.
             # Values are ALREADY in engineering units (1:1 scale).
             # Internal RCZ channel PID to MoTeC channel name & unit mapping:
             rcz_pid_map = RCZ_PID_MAP
+            yaw_rate_from_can = False
 
-            for name in namelist:
+            for name in sorted(namelist):
                 base_fname = os.path.basename(name)
                 if not (base_fname.startswith("channel_12_") or base_fname.startswith("channel2_12_")) or not base_fname.endswith("_1_1"):
                     continue
@@ -2003,7 +2043,14 @@ class DataLog(object):
                         values = _mask_interp_gaps(values, times_sec, rel_times)
                 if pid in rcz_pid_map:
                     ch_name, ch_unit, ch_scale, ch_offset = rcz_pid_map[pid]
-                    if ch_name not in self.channels:
+                    if pid == "51" and not yaw_rate_from_can:
+                        vals_processed = values * ch_scale + ch_offset
+                        populate_channel(ch_name, ch_unit, vals_processed)
+                        yaw_rate_from_can = True
+                        self.metadata["yaw_rate_source"] = (
+                            f"rcz_can_12_{dev_sub}_pid_51"
+                        )
+                    elif ch_name not in self.channels:
                         vals_processed = values * ch_scale + ch_offset
                         if pid == "1004":
                             vals_processed = np.round(vals_processed).clip(-1, 6)

@@ -11,31 +11,55 @@ import numpy as np
 # ----------------------------------------------------------------------------
 # Canonical MoTeC Channel Names (Single Source of Truth)
 # ----------------------------------------------------------------------------
-CH_GROUND_SPEED     = "Ground Speed"
-CH_CG_ACCEL_LAT     = "CG Accel Lateral"
-CH_CG_ACCEL_LON     = "CG Accel Longitudinal"
-CH_GPS_LATITUDE     = "GPS Latitude"
-CH_GPS_LONGITUDE    = "GPS Longitude"
-CH_GPS_HEADING      = "GPS Heading"
-CH_GPS_ALTITUDE     = "GPS Altitude"
-CH_GPS_SATS         = "GPS Satellites"
-CH_GPS_FIX          = "GPS Fix"
-CH_LAP_NUMBER       = "Lap Number"
-CH_THROTTLE_POS     = "Throttle Pos"
-CH_BRAKE_PRESS      = "Brake Press"
-CH_BRAKE_POS        = "Brake Pos"
-CH_ENGINE_RPM       = "Engine RPM"
-CH_STEERING_ANGLE   = "Steering Angle"
-CH_COOLANT_TEMP     = "Coolant Temp"
-CH_ENGINE_OIL_TEMP  = "Engine Oil Temp"
-CH_GEAR             = "Gear"
-CH_YAW_RATE         = "Chassis Yaw Rate"
-CH_SLIP_ANGLE_FL    = "Tire Slip Angle FL"
-CH_SLIP_ANGLE_FR    = "Tire Slip Angle FR"
-CH_SLIP_ANGLE_RL    = "Tire Slip Angle RL"
-CH_SLIP_ANGLE_RR    = "Tire Slip Angle RR"
-CH_UNDERSTEER_INDEX = "Understeer Index"
-CH_G_COMBINED       = "G Force Combined"
+CH_GROUND_SPEED         = "Ground Speed"
+CH_VEHICLE_SPEED        = "Vehicle Speed"
+CH_CG_ACCEL_LAT         = "CG Accel Lateral"
+CH_CG_ACCEL_LON         = "CG Accel Longitudinal"
+CH_CG_ACCEL_LAT_SMOOTH  = "CG Accel Lateral Smooth"
+CH_CG_ACCEL_LON_SMOOTH  = "CG Accel Long Smooth"
+CH_GPS_LATITUDE         = "GPS Latitude"
+CH_GPS_LONGITUDE        = "GPS Longitude"
+CH_GPS_HEADING          = "GPS Heading"
+CH_GPS_ALTITUDE         = "GPS Altitude"
+CH_GPS_SATS             = "GPS Satellites"
+CH_GPS_ACCURACY         = "GPS Accuracy"
+CH_GPS_FIX              = "GPS Fix"
+CH_LAP_NUMBER           = "Lap Number"
+CH_RUNNING_TIME         = "Running Time"
+CH_CORR_DIST            = "Corr Dist"
+CH_DEVICE_BATTERY       = "Device Battery"
+CH_THROTTLE_POS         = "Throttle Pos"
+CH_ACCELERATOR_POS      = "Accelerator Pos"
+CH_BRAKE_PRESS          = "Brake Press"
+CH_BRAKE_POS            = "Brake Pos"
+CH_ENGINE_RPM           = "Engine RPM"
+CH_STEERING_ANGLE       = "Steering Angle"
+CH_COOLANT_TEMP         = "Coolant Temp"
+CH_ENGINE_OIL_TEMP      = "Engine Oil Temp"
+CH_ENGINE_OIL_PRESS     = "Engine Oil Press"
+CH_GEAR                 = "Gear"
+CH_GEARBOX_TEMP         = "Gearbox Temp"
+CH_YAW_RATE             = "Chassis Yaw Rate"
+CH_LEAN_ANGLE           = "Lean Angle"
+CH_INTAKE_TEMP          = "Intake Temp"
+CH_AMBIENT_TEMP         = "Ambient Temp"
+CH_ROLL_ANGLE           = "Roll Angle"
+CH_PITCH_ANGLE          = "Pitch Angle"
+CH_SLIP_ANGLE_FL        = "Tire Slip Angle FL"
+CH_SLIP_ANGLE_FR        = "Tire Slip Angle FR"
+CH_SLIP_ANGLE_RL        = "Tire Slip Angle RL"
+CH_SLIP_ANGLE_RR        = "Tire Slip Angle RR"
+CH_UNDERSTEER_INDEX     = "Understeer Index"
+CH_G_COMBINED           = "G Force Combined"
+CH_WHEEL_SPEED_AVG      = "Wheel Speed Avg"
+CH_WHEEL_SPEED_FL       = "Wheel Speed FL"
+CH_WHEEL_SPEED_FR       = "Wheel Speed FR"
+CH_WHEEL_SPEED_RL       = "Wheel Speed RL"
+CH_WHEEL_SPEED_RR       = "Wheel Speed RR"
+CH_BRAKE_PRESS_FL       = "Brake Press FL"
+CH_BRAKE_PRESS_FR       = "Brake Press FR"
+CH_BRAKE_PRESS_RL       = "Brake Press RL"
+CH_BRAKE_PRESS_RR       = "Brake Press RR"
 
 DISCRETE_CHANNELS = {CH_GEAR, CH_LAP_NUMBER, CH_GPS_FIX, CH_GPS_SATS}
 
@@ -51,8 +75,8 @@ CHANNEL_ALIASES = {
     "velocity":               (CH_GROUND_SPEED, "km/h", 2),
     "velocity-calc":          (CH_GROUND_SPEED, "km/h", 2),
     "velocity kmh":           (CH_GROUND_SPEED, "km/h", 2),
-    "Vehicle Speed":          ("Vehicle Speed", "km/h", 2),
-    "velocity-canbus":        ("Vehicle Speed", "km/h", 2),
+    "Vehicle Speed":          (CH_VEHICLE_SPEED, "km/h", 2),
+    "velocity-canbus":        (CH_VEHICLE_SPEED, "km/h", 2),
 
     # GPS Coordinates
     "GPS Latitude":           (CH_GPS_LATITUDE, "deg", 7),
@@ -136,7 +160,7 @@ CHANNEL_ALIASES = {
     "OBD_197623":             ("Tire Status RL", "", 0),
     "OBD_99319":              ("Tire Status RR", "", 0),
     "OBD_3155786":            (CH_ENGINE_OIL_TEMP, "C", 2),
-    "OBD_45098826":           ("Ambient Temp", "C", 2),
+    "OBD_45098826":           (CH_AMBIENT_TEMP, "C", 2),
     "OBD_1020":               ("Fuel Level", "%", 2),
     "OBD_10058":              ("Analog 1", "", 2),
     "OBD_44050250":           ("Digital 42", "", 0),
@@ -164,7 +188,7 @@ IBT_CHANNEL_MAP = [
     ("Gear",               CH_GEAR,             "",        0, None),
     ("WaterTemp",          CH_COOLANT_TEMP,     "C",       2, None),
     ("OilTemp",            CH_ENGINE_OIL_TEMP,  "C",       2, None),
-    ("OilPress",           "Engine Oil Press",  "kPa",     2, lambda x: x * 100.0),
+    ("OilPress",           CH_ENGINE_OIL_PRESS, "kPa",     2, lambda x: x * 100.0),
     ("ManifoldPress",      "Manifold Press",    "kPa",     2, lambda x: x * 100.0),
     ("FuelLevel",          "Fuel Level",        "l",       2, None),
     ("Voltage",            "Battery Voltage",   "V",       2, None),
@@ -173,39 +197,39 @@ IBT_CHANNEL_MAP = [
 ]
 
 IBT_WHEEL_SPEED_MAP = [
-    ("LFspeed", "Wheel Speed FL"),
-    ("RFspeed", "Wheel Speed FR"),
-    ("LRspeed", "Wheel Speed RL"),
-    ("RRspeed", "Wheel Speed RR"),
+    ("LFspeed", CH_WHEEL_SPEED_FL),
+    ("RFspeed", CH_WHEEL_SPEED_FR),
+    ("LRspeed", CH_WHEEL_SPEED_RL),
+    ("RRspeed", CH_WHEEL_SPEED_RR),
 ]
 
 IBT_BRAKE_PRESS_MAP = [
-    ("LFbrakeLinePress", "Brake Press FL"),
-    ("RFbrakeLinePress", "Brake Press FR"),
-    ("LRbrakeLinePress", "Brake Press RL"),
-    ("RRbrakeLinePress", "Brake Press RR"),
+    ("LFbrakeLinePress", CH_BRAKE_PRESS_FL),
+    ("RFbrakeLinePress", CH_BRAKE_PRESS_FR),
+    ("LRbrakeLinePress", CH_BRAKE_PRESS_RL),
+    ("RRbrakeLinePress", CH_BRAKE_PRESS_RR),
 ]
 
 # ----------------------------------------------------------------------------
 # RaceChrono RCZ binary ZIP channel PID -> (canonical_name, unit, scale, offset)
 # ----------------------------------------------------------------------------
 RCZ_PID_MAP = {
-    "10024": ("Engine RPM", "rpm", 1.0, 0.0),            # 605 ~ 7489 rpm
-    "10025": ("Accelerator Pos", "%", 1.0, 0.0),         # 0 ~ 100 % (Pedal)
-    "10071": ("Throttle Pos", "%", 1.0, 0.0),            # 0 ~ 100 % (Throttle Valve)
-    "1002":  ("Brake Pos", "%", 1.0, 0.0),               # 0 ~ 100 %
-    "1033":  ("Brake Press", "kPa", 1.0, 0.0),           # 0 ~ 9600 kPa
-    "1007":  ("Engine Oil Press", "kPa", 1.0, 0.0),      # 110 ~ 683 kPa
-    "10066": ("Engine Oil Temp", "C", 1.0, 0.0),         # 57 ~ 104 C
-    "10026": ("Coolant Temp", "C", 1.0, 0.0),            # 67 ~ 95 C
-    "1005":  ("Gearbox Temp", "C", 1.0, 0.0),            # 63 ~ 114 C
-    "10029": ("Intake Temp", "C", 1.0, 0.0),             # 29 ~ 42 C
-    "1001":  ("Steering Angle", "deg", -1.0, 0.0),        # -294 ~ 457 deg
-    "1004":  ("Gear", "", 1.0, 0.0),                     # -1 ~ 5 (Integer gear)
-    "4":     ("Ground Speed", "km/h", 3.6, 0.0),         # raw is m/s (0 ~ 50 m/s -> km/h)
-    "51":    ("Chassis Yaw Rate", "deg/s", 1.0, 0.0),    # -37 ~ 39 deg/s
-    "7":     ("Roll Angle", "deg", 1.0, 0.0),            # Roll Angle (-11.6 ~ 11.2 deg)
-    "8":     ("Pitch Angle", "deg", 1.0, 0.0),           # Pitch Angle (-10.6 ~ 4.0 deg)
-    "10031": ("Ambient Temp", "C", 1.0, 0.0),            # Ambient Temp (16 ~ 87 C)
-    "1053576": ("Wheel Speed Avg", "rpm", 1.0, 0.0),     # Wheel Speed (1296 ~ 3230)
+    "10024": (CH_ENGINE_RPM, "rpm", 1.0, 0.0),            # 605 ~ 7489 rpm
+    "10025": (CH_ACCELERATOR_POS, "%", 1.0, 0.0),         # 0 ~ 100 % (Pedal)
+    "10071": (CH_THROTTLE_POS, "%", 1.0, 0.0),            # 0 ~ 100 % (Throttle Valve)
+    "1002":  (CH_BRAKE_POS, "%", 1.0, 0.0),               # 0 ~ 100 %
+    "1033":  (CH_BRAKE_PRESS, "kPa", 1.0, 0.0),           # 0 ~ 9600 kPa
+    "1007":  (CH_ENGINE_OIL_PRESS, "kPa", 1.0, 0.0),      # 110 ~ 683 kPa
+    "10066": (CH_ENGINE_OIL_TEMP, "C", 1.0, 0.0),         # 57 ~ 104 C
+    "10026": (CH_COOLANT_TEMP, "C", 1.0, 0.0),            # 67 ~ 95 C
+    "1005":  (CH_GEARBOX_TEMP, "C", 1.0, 0.0),            # 63 ~ 114 C
+    "10029": (CH_INTAKE_TEMP, "C", 1.0, 0.0),             # 29 ~ 42 C
+    "1001":  (CH_STEERING_ANGLE, "deg", -1.0, 0.0),       # -294 ~ 457 deg
+    "1004":  (CH_GEAR, "", 1.0, 0.0),                     # -1 ~ 5 (Integer gear)
+    "4":     (CH_GROUND_SPEED, "km/h", 3.6, 0.0),         # raw is m/s (0 ~ 50 m/s -> km/h)
+    "51":    (CH_YAW_RATE, "deg/s", 1.0, 0.0),            # -37 ~ 39 deg/s
+    "7":     (CH_ROLL_ANGLE, "deg", 1.0, 0.0),            # Roll Angle (-11.6 ~ 11.2 deg)
+    "8":     (CH_PITCH_ANGLE, "deg", 1.0, 0.0),           # Pitch Angle (-10.6 ~ 4.0 deg)
+    "10031": (CH_AMBIENT_TEMP, "C", 1.0, 0.0),            # Ambient Temp (16 ~ 87 C)
+    "1053576": (CH_WHEEL_SPEED_AVG, "rpm", 1.0, 0.0),     # Wheel Speed (1296 ~ 3230)
 }
