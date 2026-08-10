@@ -288,7 +288,7 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
             filtered_vals = values_array[mask]
             data_log.add_channel(name, units, float, decimals)
             data_log.channels[name].decimals = decimals
-            data_log.channels[name].messages = [Message(sample_times[i], filtered_vals[i]) for i in range(len(sample_times))]
+            data_log.channels[name].set_samples(sample_times, filtered_vals)
 
         # Lap Number Channel
         populate_channel(CH_LAP_NUMBER, "", lap_numbers, 0)

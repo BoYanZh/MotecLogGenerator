@@ -198,8 +198,9 @@ def parse_racechrono_log(data_log, log_lines, target_lap=None):
     if target_lap is not None and str(target_lap).lower() != "all":
         target_lap_str = str(target_lap).strip()
 
-    # Track lap timing metadata
+    # Track lap timing metadata & channel sample buffers
     laps_timing = {}
+    chan_buffers = {name: ([], []) for _, name, _ in active_columns}
 
     for values in valid_lines:
         if lap_number_idx != -1 and lap_number_idx < len(values):
@@ -247,14 +248,19 @@ def parse_racechrono_log(data_log, log_lines, target_lap=None):
                 elif raw_lower in ("yaw_rate", "z_rate_of_rotation", "y_rate_of_rotation") and name == CH_YAW_RATE:
                     val *= -1.0
 
-                message = Message(t, val)
-                data_log.channels[name].messages.append(message)
+                ts_buf, val_buf = chan_buffers[name]
+                ts_buf.append(t)
+                val_buf.append(val)
 
                 val_text_split = val_str.split(".")
                 decimals_present = 0 if len(val_text_split) == 1 else len(val_text_split[1])
                 data_log.channels[name].decimals = max(decimals_present, data_log.channels[name].decimals)
             except ValueError:
                 pass
+
+    for name, (ts_buf, val_buf) in chan_buffers.items():
+        if ts_buf:
+            data_log.channels[name].set_samples(ts_buf, val_buf)
 
     # Fallback: derive Chassis Yaw Rate from GPS Heading derivative if missing
     data_log._derive_yaw_rate_from_gps_heading()

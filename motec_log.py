@@ -73,7 +73,7 @@ class MotecLog(object):
             prev_meta_ptr=0,
             next_meta_ptr=0,
             data_ptr=0,
-            data_len=len(log_channel.messages),
+            data_len=len(log_channel.values),
             dtype=dtype,
             freq=freq,
             shift=0,
@@ -84,7 +84,7 @@ class MotecLog(object):
             short_name="",
             unit=log_channel.units,
         )
-        ld_channel._data = np.array([dtype(msg.value) for msg in log_channel.messages], dtype=dtype)
+        ld_channel._data = log_channel.values.astype(dtype)
         self.ld_channels.append(ld_channel)
 
     def add_all_channels(self, data_log):

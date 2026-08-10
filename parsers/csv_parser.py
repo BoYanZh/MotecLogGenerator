@@ -45,33 +45,40 @@ def parse_csv_log(data_log, log_lines):
         channel_dict[name] = i
         i += 1
 
+    chan_buffers = {name: ([], []) for name in channel_names}
+
     # Go through each line grabbing all the channel values
     for line in log_lines[data_header_idx + 1:]:
         line = line.strip("\n")
         values = line.split(",")
 
         # Timestamp is the first element
-        t = float(values[0])
+        try:
+            t = float(values[0])
+        except ValueError:
+            continue
 
-        # Grab each remaining channel value. We keep a map of all the channel names and column
-        # numbers we are retrieving, so we will look at that to determine which columns to read.
-        # If we fail to read an entry in any column, we will delete that channel entirely.
         invalid_channels = []
         for name, i in channel_dict.items():
-            # We'll only parse numeric data
             try:
                 val = float(values[i + 1])
-                message = Message(t, val)
-                data_log.channels[name].messages.append(message)
+                ts_buf, val_buf = chan_buffers[name]
+                ts_buf.append(t)
+                val_buf.append(val)
 
                 val_text_split = values[i + 1].split(".")
                 decimals_present = 0 if len(val_text_split) == 1 else len(val_text_split[1])
                 data_log.channels[name].decimals = max(decimals_present, data_log.channels[name].decimals)
             except ValueError:
-                print("WARNING: Found non numeric values for channel %s, removing channel" % \
-                    name)
+                print("WARNING: Found non numeric values for channel %s, removing channel" % name)
                 invalid_channels.append(name)
 
         for name in invalid_channels:
             del channel_dict[name]
             del data_log.channels[name]
+            if name in chan_buffers:
+                del chan_buffers[name]
+
+    for name, (ts_buf, val_buf) in chan_buffers.items():
+        if ts_buf and name in data_log.channels:
+            data_log.channels[name].set_samples(ts_buf, val_buf)
