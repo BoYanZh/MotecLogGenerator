@@ -5,21 +5,33 @@ import math
 
 import numpy as np
 
-
 from constants import (
-    CH_GROUND_SPEED, CH_ENGINE_RPM,
-    CH_CG_ACCEL_LAT, CH_CG_ACCEL_LON, CH_CG_ACCEL_LAT_SMOOTH, CH_CG_ACCEL_LON_SMOOTH,
-    CH_GPS_LATITUDE, CH_GPS_LONGITUDE, CH_GPS_HEADING,
+    CH_ACCELERATOR_POS,
+    CH_BRAKE_POS,
+    CH_CG_ACCEL_LAT,
+    CH_CG_ACCEL_LAT_SMOOTH,
+    CH_CG_ACCEL_LON,
+    CH_CG_ACCEL_LON_SMOOTH,
+    CH_ENGINE_RPM,
+    CH_G_COMBINED,
+    CH_GPS_HEADING,
+    CH_GPS_LATITUDE,
+    CH_GPS_LONGITUDE,
+    CH_GROUND_SPEED,
     CH_RUNNING_TIME,
-    CH_THROTTLE_POS, CH_ACCELERATOR_POS, CH_BRAKE_POS,
-    CH_STEERING_ANGLE, CH_YAW_RATE,
-    CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR, CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR,
-    CH_UNDERSTEER_INDEX, CH_G_COMBINED,
+    CH_SLIP_ANGLE_FL,
+    CH_SLIP_ANGLE_FR,
+    CH_SLIP_ANGLE_RL,
+    CH_SLIP_ANGLE_RR,
+    CH_STEERING_ANGLE,
+    CH_THROTTLE_POS,
+    CH_UNDERSTEER_INDEX,
+    CH_YAW_RATE,
     TRACK_BEACONS,
 )
-
 from core.interp import _interp_zoh, _mask_interp_gaps
 from core.models import Channel, Message
+
 
 def _parse_vbo_latlon(val_str, is_lon=False):
     try:
@@ -156,8 +168,10 @@ class DataLog(object):
 
         if not traps:
             venue = self.metadata.get("venue_name", "").lower().replace("_", " ").replace("-", " ").replace(",", " ")
-            if "ca 9" in venue or "ca-9" in venue or "highway 9" in venue or "saratoga" in venue:
-                traps = TRACK_BEACONS["CA-9 S"] + TRACK_BEACONS["CA-9 N"]
+            if "ca 9 n" in venue or "ca-9 n" in venue or "highway 9 north" in venue:
+                traps = TRACK_BEACONS["CA-9 N"]
+            elif "ca 9" in venue or "ca-9" in venue or "highway 9" in venue or "saratoga" in venue:
+                traps = TRACK_BEACONS["CA-9 S"]
             elif "laguna" in venue or "seca" in venue:
                 traps = [TRACK_BEACONS["WeatherTech Raceway Laguna Seca"]]
             elif "sonoma" in venue:
@@ -589,7 +603,7 @@ class DataLog(object):
         parse_csv_log(self, log_lines)
 
     def from_racechrono_log(self, log_lines, target_lap=None):
-        from parsers.racechrono_parser import parse_racechrono_log
+        from parsers.racechrono_csv_parser import parse_racechrono_log
         parse_racechrono_log(self, log_lines, target_lap=target_lap)
 
     def from_ibt_log(self, ibt_file_path):

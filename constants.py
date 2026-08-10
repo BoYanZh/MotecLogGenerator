@@ -215,8 +215,8 @@ IBT_BRAKE_PRESS_MAP = [
 # ----------------------------------------------------------------------------
 RCZ_PID_MAP = {
     "10024": (CH_ENGINE_RPM, "rpm", 1.0, 0.0),            # 605 ~ 7489 rpm
-    "10025": (CH_ACCELERATOR_POS, "%", 1.0, 0.0),         # 0 ~ 100 % (Pedal)
-    "10071": (CH_THROTTLE_POS, "%", 1.0, 0.0),            # 0 ~ 100 % (Throttle Valve)
+    "10071": (CH_ACCELERATOR_POS, "%", 1.0, 0.0),         # 0 ~ 100 % (Accelerator Pedal Pos - 0% when idle)
+    "10025": (CH_THROTTLE_POS, "%", 1.0, 0.0),            # Throttle Body Valve Angle
     "1002":  (CH_BRAKE_POS, "%", 1.0, 0.0),               # 0 ~ 100 %
     "1033":  (CH_BRAKE_PRESS, "kPa", 1.0, 0.0),           # 0 ~ 9600 kPa
     "1007":  (CH_ENGINE_OIL_PRESS, "kPa", 1.0, 0.0),      # 110 ~ 683 kPa
