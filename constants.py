@@ -238,7 +238,7 @@ RCZ_PID_MAP = {
 # Track Start/Finish Beacons Coordinate Database
 # ----------------------------------------------------------------------------
 TRACK_BEACONS = {
-    "WeatherTech Raceway Laguna Seca": {"lat": 36.58646300, "lon": -121.75664133, "heading_deg": 215.0, "name": "Start/Finish"},
+    "WeatherTech Raceway Laguna Seca": {"lat": 36.58620173, "lon": -121.75661697, "heading_deg": 218.45, "name": "Start/Finish"},
     "Sonoma Raceway": {"lat": 38.16146533, "lon": -122.45478067, "heading_deg": 309.0, "name": "Start/Finish"},
     "Thunderhill East Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
     "Thunderhill East Cyclone": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
