@@ -56,6 +56,51 @@ def calculate_math_channels(data_log, g_source="auto", kinematics=False):
     derive_brake_pos(data_log)
     calculate_input_rates(data_log)
     mirror_throttle_accel(data_log)
+    derive_gear_from_rpm_speed(data_log)
+
+
+def derive_gear_from_rpm_speed(data_log):
+    """ Derive integer Gear (1-6) from Engine RPM and Ground Speed ratio when Gear is not logged directly. """
+    from constants import CH_GEAR, CH_ENGINE_RPM, CH_GROUND_SPEED
+    if CH_GEAR in data_log.channels:
+        return
+    if CH_ENGINE_RPM not in data_log.channels or CH_GROUND_SPEED not in data_log.channels:
+        return
+    rpm_chan = data_log.channels[CH_ENGINE_RPM]
+    spd_chan = data_log.channels[CH_GROUND_SPEED]
+    n = min(len(rpm_chan.messages), len(spd_chan.messages))
+    if n < 2:
+        return
+    
+    t_arr = np.array([m.timestamp for m in rpm_chan.messages[:n]])
+    rpm_vals = np.array([m.value for m in rpm_chan.messages[:n]])
+    spd_vals = np.array([m.value for m in spd_chan.messages[:n]])  # km/h
+    if spd_chan.units == "mph":
+        spd_vals *= 1.60934
+
+    ratios = np.zeros(n)
+    mask = (spd_vals > 5.0) & (rpm_vals > 500.0)
+    ratios[mask] = rpm_vals[mask] / spd_vals[mask]
+
+    gear_vals = np.zeros(n, dtype=np.float64)
+    for i in range(n):
+        if mask[i]:
+            r = ratios[i]
+            if r > 110:
+                gear_vals[i] = 1.0
+            elif r > 70:
+                gear_vals[i] = 2.0
+            elif r > 52:
+                gear_vals[i] = 3.0
+            elif r > 42:
+                gear_vals[i] = 4.0
+            elif r > 33:
+                gear_vals[i] = 5.0
+            elif r > 20:
+                gear_vals[i] = 6.0
+
+    data_log.add_channel(CH_GEAR, "", float, 0)
+    data_log.channels[CH_GEAR].messages = [Message(t_arr[i], gear_vals[i]) for i in range(n)]
 
 
 def derive_smoothed_accel(data_log, window_sec=0.5):
