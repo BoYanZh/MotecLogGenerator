@@ -30,12 +30,25 @@ channel names and units automatically where applicable.
 
 
 def get_rcz_stints(rcz_path):
+    stints = set()
     with zipfile.ZipFile(rcz_path, 'r') as z:
-        if "session.json" in z.namelist():
+        namelist = z.namelist()
+        if "session.json" in namelist:
             session_json = json.loads(z.read("session.json").decode("utf-8"))
-            laps = session_json.get("laps", [])
-            return sorted(set(lap.get("sessionResume", 0) for lap in laps))
-    return [0]
+            for lap in session_json.get("laps", []):
+                stints.add(lap.get("sessionResume", 0))
+        for name in namelist:
+            if name.startswith("resume_"):
+                parts = name.split("/")
+                if parts[0].startswith("resume_"):
+                    try:
+                        st_id = int(parts[0].replace("resume_", ""))
+                        stints.add(st_id)
+                    except ValueError:
+                        pass
+    if not stints:
+        stints.add(0)
+    return sorted(list(stints))
 
 
 _get_stints = get_rcz_stints
@@ -80,9 +93,30 @@ def process_one_file(args, stint_override=None, output_override=None):
     out_base = output_override if output_override is not None else args.output
 
     active_type = args.log_type
-    if active_type == "AUTO":
-        active_type = auto_detect_log_type(args.log)
-        print(f"Auto-detected log type: {active_type}")
+    if active_type == "AUTO" or args.log.lower().endswith(".rcz"):
+        if args.log.lower().endswith(".rcz"):
+            active_type = "RCZ"
+        else:
+            active_type = auto_detect_log_type(args.log)
+            print(f"Auto-detected log type: {active_type}")
+
+    if active_type == "RCZ" and str(stint_arg).lower() == "all":
+        try:
+            stints = get_rcz_stints(args.log)
+            if len(stints) > 1:
+                print(f"Auto-detected {len(stints)} stints in RCZ log: {stints}")
+                base_output = out_base if out_base else args.log
+                base_name, _ = os.path.splitext(base_output)
+                exported_files = []
+                for st in stints:
+                    st_out = f"{base_name}_stint{st}"
+                    print(f"\n=== Exporting Stint {st} -> {st_out} ===")
+                    process_one_file(args, stint_override=str(st), output_override=st_out)
+                    exported_files.append(st_out)
+                print("Auto-stint split export complete.")
+                return exported_files
+        except Exception as e:
+            print(f"Warning: Failed checking stints, falling back to default export: {e}")
 
     print("Loading log...")
     data_log = DataLog()
