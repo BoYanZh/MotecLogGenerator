@@ -245,4 +245,14 @@ TRACK_BEACONS = {
     "Thunderhill 5 Mile Double Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
     "Thunderhill 5 Mile Bypass": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
     "Thunderhill 5 Mile Full": {"lat": 39.53786600, "lon": -122.33400700, "heading_deg": 93.0, "name": "Start/Finish"},
+    "CA-9 S": [
+        {"lat": 37.25430017, "lon": -122.03870167, "heading_deg": 264.0, "name": "Start"},
+        {"lat": 37.25811550, "lon": -122.12268867, "heading_deg": 221.0, "name": "9-35 Junction"},
+        {"lat": 37.16793350, "lon": -122.13589900, "heading_deg": 179.0, "name": "Finish"},
+    ],
+    "CA-9 N": [
+        {"lat": 37.16852117, "lon": -122.13586100, "heading_deg": 3.0, "name": "Start"},
+        {"lat": 37.25817950, "lon": -122.12256300, "heading_deg": 44.0, "name": "9-35 Junction"},
+        {"lat": 37.25431967, "lon": -122.03861317, "heading_deg": 81.0, "name": "Finish"},
+    ],
 }

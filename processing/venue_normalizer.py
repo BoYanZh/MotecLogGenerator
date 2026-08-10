@@ -54,6 +54,12 @@ def normalize_venue(name):
     if "chuckwalla" in s_lower:
         return "Chuckwalla Valley Raceway"
 
+    # 7. Highway 9 / CA-9
+    if any(k in s_lower for k in ["ca 9", "ca9", "highway 9", "hwy 9", "saratoga"]):
+        if any(k in s_lower for k in [" n", "_n", "-n", "north"]):
+            return "CA-9 N"
+        return "CA-9 S"
+
     return name
 
 
