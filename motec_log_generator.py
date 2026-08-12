@@ -67,6 +67,8 @@ def auto_detect_log_type(file_path):
         return "IBT"
     if file_path.endswith(".rcz"):
         return "RCZ"
+    if file_path.lower().endswith((".xrk", ".xrz")):
+        return "XRK"
     try:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             sample = f.read(2048)
@@ -174,6 +176,9 @@ def process_one_file(args, stint_override=None, output_override=None):
     elif active_type == "IBT":
         print("Extracting iRacing .ibt telemetry...")
         data_log.from_ibt_log(args.log)
+    elif active_type == "XRK":
+        print("Extracting AIM XRK/XRZ telemetry...")
+        data_log.from_xrk_log(args.log, target_lap=args.lap)
 
     if not data_log.channels:
         print("ERROR: Failed to find any channels in log data")
@@ -280,7 +285,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
     parser.add_argument("log", type=str, help="Path to logfile")
     parser.add_argument("log_type", type=str, help="Type of log to process",
-                        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO", "RCZ", "PBBUDDY", "VBO", "AUTO"])
+                        choices=["CAN", "CSV", "ACCESSPORT", "RACECHRONO", "RCZ", "PBBUDDY", "VBO", "IBT", "XRK", "AUTO"])
 
     parser.add_argument("--output", type=str,
                         help="Name of output file, defaults to the same filename as 'log'")
@@ -334,9 +339,13 @@ if __name__ == '__main__':
         print("WARNING: Overriding --log_type '%s' to 'RCZ' because input file has .rcz extension" % args.log_type)
         args.log_type = "RCZ"
 
+    if args.log.lower().endswith((".xrk", ".xrz")) and args.log_type != "XRK":
+        print("WARNING: Overriding --log_type '%s' to 'XRK' because input file has .xrk/.xrz extension" % args.log_type)
+        args.log_type = "XRK"
+
     if os.path.isdir(args.log):
         dir_path = args.log
-        ext_filter = ".rcz" if args.log_type == "RCZ" else ".csv"
+        ext_filter = ".rcz" if args.log_type == "RCZ" else ".xrk" if args.log_type == "XRK" else ".csv"
         matching_files = sorted([
             os.path.join(dir_path, f) for f in os.listdir(dir_path)
             if f.lower().endswith(ext_filter)

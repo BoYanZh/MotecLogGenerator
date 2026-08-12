@@ -1,6 +1,6 @@
 # MotecLogGenerator
 
-A high-performance Python utility for generating MoTeC `.ld` / `.ldx` log files from external telemetry sources (iRacing `.ibt`, RaceChrono `.rcz`, AiM Solo / RaceStudio, Racelogic VBOX, COBB Accessport, PB Buddy, CAN bus logs, and generic CSVs). 
+A high-performance Python utility for generating MoTeC `.ld` / `.ldx` log files from external telemetry sources (iRacing `.ibt`, RaceChrono `.rcz`, AIM `.xrk`/`.xrz`, AiM Solo / RaceStudio, Racelogic VBOX, COBB Accessport, PB Buddy, CAN bus logs, and generic CSVs).
 
 Generated log files automatically include the MoTeC Pro Analysis magic flag (`0xc81a4`), allowing them to be opened natively in both **MoTeC i2 Standard** and **MoTeC i2 Pro** with all advanced math and Pro features unlocked.
 
@@ -12,9 +12,10 @@ Generated log files automatically include the MoTeC Pro Analysis magic flag (`0x
   * **iRacing Native `.ibt` Telemetry**: Direct 60Hz binary parser for iRacing telemetry files (no Mu Exporter needed). Auto-extracts driver, car, track metadata from YAML session info.
   * **Racelogic VBOX `.vbo` Logs**: Parses NMEA latitude/longitude, velocity, 10Hz/20Hz/100Hz IMU accelerometers, gyroscopes, and CAN bus channels.
   * **RaceChrono Native `.rcz` Archives**: Direct binary unzipping, multi-stint auto-splitting, microsecond time-drift correction, and 20Hz/25Hz GPS.
-  * **AiM Solo / RaceStudio CSVs**: Auto-maps `PPS`, `SteerAngle`, `BrakePress`, `RPM`, `Gear`, temperatures, and lap beacon markers.
+  * **AIM `.xrk` / `.xrz` Native Logs**: Direct binary parsing of AIM data logger files (via `libxrk`), including compressed `.xrz` archives, GPS/lap detection, and driver/vehicle/venue metadata.
   * **PB Buddy & Generic CSVs**: Auto-detects custom column names, speed units (`mph` $\to$ `km/h`), and heading angles.
   * **COBB Accessport CSVs**: Resamples ECU channels cleanly without zero-order hold gaps.
+  * **AiM Solo / RaceStudio CSVs**: Auto-maps `PPS`, `SteerAngle`, `BrakePress`, `RPM`, `Gear`, temperatures, and lap beacon markers.
   * **Raw CAN Bus Logs**: Parses raw CAN `.log` files paired with a `.dbc` file.
 * **Vehicle Dynamics & Math Channels**:
   * **G-Force Source Selection (`--g-source {auto,sensor,calc}`)**: Choose between hardware IMU sensors or GPS Kinematic derivation ($a_{\text{lat}} = v \cdot \omega$).
@@ -29,12 +30,13 @@ Generated log files automatically include the MoTeC Pro Analysis magic flag (`0x
 ## Python Version & Dependencies
 
 * **Python Version**: Python 3.8 or higher (3.8 ~ 3.12+)
-* **Dependencies**: `numpy` (required), `cantools` (only required for CAN bus log type)
+* **Dependencies**: `numpy` (required), `cantools` (only required for CAN bus log type), `libxrk` (only required for AIM `.xrk`/`.xrz` log type)
 
 Install dependencies via pip:
 ```bash
 pip install numpy
 pip install cantools  # only needed for CAN bus log processing
+pip install libxrk    # only needed for AIM XRK/XRZ log processing
 ```
 
 ---
@@ -62,14 +64,22 @@ python motec_log_generator.py /path/to/aim_or_racechrono.csv RACECHRONO
 ```
 *Automatically maps channels like `PPS` (Throttle), `SteerAngle`, `BrakePress`, `OilTemp`, `ECT` with SI unit conversions (`psi -> kPa`, `°F -> °C`, `mph -> km/h`), and extracts lap beacon timestamps.*
 
-### 4. Automatic Log Type Detection (`AUTO`)
+### 4. AIM XRK / XRZ Native Logs
 ```bash
-# Auto-detect log format (IBT, RCZ, PB Buddy, AiM, RaceChrono, Accessport, etc.)
+# Convert AIM data logger .xrk / compressed .xrz file
+python motec_log_generator.py /path/to/session.xrk XRK
+python motec_log_generator.py /path/to/session.xrz AUTO
+```
+*Binary parser backed by [`libxrk`](https://github.com/m3rlin45/libxrk). Auto-extracts laps, driver/vehicle/venue metadata, and standard channels (GPS, RPM, speed, G-forces).*
+
+### 5. Automatic Log Type Detection (`AUTO`)
+```bash
+# Auto-detect log format (IBT, RCZ, XRK/XRZ, PB Buddy, AiM, RaceChrono, Accessport, etc.)
 python motec_log_generator.py /path/to/session.ibt AUTO
 python motec_log_generator.py /path/to/session_export.csv AUTO
 ```
 
-### 5. CAN Bus & Accessport Logs
+### 6. CAN Bus & Accessport Logs
 ```bash
 python motec_log_generator.py /path/to/can_data.log CAN --dbc /path/to/car.dbc
 python motec_log_generator.py /path/to/accessport.csv ACCESSPORT
@@ -112,7 +122,7 @@ Options:
 * **`motec_log.py`**: MoTeC binary `.ld` header packer and `.ldx` XML beacon generator.
 * **`ldparser/`**: Low-level MoTeC `.ld` binary file parser/writer module.
 * **`can_utils/`**: CAN bus helper utilities (`list_can_ids.py`).
-* **`tools/`**: Helper scripts & analysis tools (`verify_log.py`, `convert_iracing_mu.py`, `convert_acti_log.py`, `analyze_tire_grip.py`, `analyze_lap_comparison.py`, `analyze_corner_time_loss.py`). See [`tools/README.md`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/README.md).
+* **`tools/`**: Helper scripts & analysis tools (`verify_log.py`, `convert_iracing_mu.py`, `convert_acti_log.py`, `analyze_tire_grip.py`, `analyze_lap_comparison.py`, `analyze_corner_time_loss.py`). See [`tools/README.md`](tools/README.md).
 * **`tests/`**: Unit test suite.
 * **`examples/`**: Sample telemetry logs and quickstart datasets.
 
@@ -120,7 +130,7 @@ Options:
 
 ## Helper Scripts & Tools (`tools/`)
 
-Standalone helper utilities are located in the [`tools/`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools) directory:
+Standalone helper utilities are located in the [`tools/`](tools) directory:
 
 1. **`python tools/verify_log.py <log.ld>`**: Validates MoTeC `.ld` header integrity, channel bounds, and `.ldx` XML beacon sorting.
 2. **`python tools/convert_iracing_mu.py <input_mu.ld>`**: *(Legacy: prefer native `.ibt` parser)* Converts 356-channel heavy iRacing Mu `.ld` logs into lightweight (~3-4MB) standardized MoTeC `.ld`/`.ldx` logs with strict canonical channel names, `m/s` → `km/h` speed scaling, DMS GPS combination, and auto lap beacons.
@@ -129,7 +139,7 @@ Standalone helper utilities are located in the [`tools/`](file:///C:/Users/boyan
 5. **`python tools/analyze_lap_comparison.py --dir data/exported`**: Compares lap times, sector splits, and generates a ranked leaderboard across sessions.
 6. **`python tools/analyze_corner_time_loss.py <ref.ld> <target.ld>`**: Analyzes corner-by-corner time loss ($\Delta t$), apex minimum speeds ($V_{\min}$), and driver performance diagnostics.
 
-See [`tools/README.md`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/README.md) for detailed documentation.
+See [`tools/README.md`](tools/README.md) for detailed documentation.
 
 ---
 

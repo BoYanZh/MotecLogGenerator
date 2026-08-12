@@ -416,6 +416,28 @@ def test_csv_middle_non_numeric_column_keeps_right_columns():
     assert colC[-1].value == 300.0
 
 
+# ---------------------------------------------------------------------------
+# AIM XRK / XRZ
+# ---------------------------------------------------------------------------
+def test_xrk_smoke():
+    pytest = pytest_if_available()
+    if pytest is None:
+        return
+
+    try:
+        import libxrk  # noqa: F401
+    except ImportError:
+        pytest.skip("libxrk not installed")
+
+    log = DataLog()
+    log.from_xrk_log(os.path.join(EXAMPLES, "aim_sample.xrk"))
+    assert len(log.channels) >= 5, f"Too few channels: {len(log.channels)}"
+    assert "GPS Latitude" in log.channels
+    assert "GPS Longitude" in log.channels
+    assert log.duration() > 0
+    _dedup_channels(log)
+
+
 
 if __name__ == "__main__":
     # Run all test_* functions directly without pytest

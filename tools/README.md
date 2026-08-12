@@ -35,7 +35,7 @@ python tools/convert_acti.py /path/to/acti/logs --track thunderhill_east_bypass
 ```
 
 ### Auto-Calibration Mode (`--calibrate`)
-Automatically computes rotation angle $\theta$ and translation offsets $(dx, dy)$ for **any new Assetto Corsa track mod** by matching an ACTI simulator log against a real-world GPS log via ICP point-cloud optimization, saving the calibrated profile to [`acti_track_gps.json`](file:///C:/Users/boyanzh/Desktop/Programs/repos/MotecLogGenerator/tools/acti_track_gps.json):
+Automatically computes rotation angle $\theta$ and translation offsets $(dx, dy)$ for **any new Assetto Corsa track mod** by matching an ACTI simulator log against a real-world GPS log via ICP point-cloud optimization, saving the calibrated profile to [`acti_track_gps.json`](acti_track_gps.json):
 
 ```bash
 # Calibrate a new track profile (e.g. Laguna Seca or Sonoma)

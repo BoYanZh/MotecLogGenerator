@@ -465,6 +465,7 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
                 elif ch_name not in data_log.channels:
                     vals_processed = values * ch_scale + ch_offset
                     if pid == "1004":
+                        vals_processed = np.nan_to_num(vals_processed, nan=0.0)
                         vals_processed = np.round(vals_processed).clip(-1, 6)
                     populate_channel(ch_name, ch_unit, vals_processed)
             else:
@@ -530,6 +531,7 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
                             interpolated = _mask_interp_gaps(interpolated, times_sec, rel_t)
                     processed = interpolated * ch_scale + ch_offset
                     if pid == "1004":
+                        processed = np.nan_to_num(processed, nan=0.0)
                         processed = np.round(processed).clip(-1, 6)
                     if ch_name not in data_log.channels:
                         populate_channel(ch_name, ch_unit, processed)

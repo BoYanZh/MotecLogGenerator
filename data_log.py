@@ -8,6 +8,7 @@ import numpy as np
 from constants import (
     CH_ACCELERATOR_POS,
     CH_BRAKE_POS,
+    CH_BRAKE_PRESS,
     CH_CG_ACCEL_LAT,
     CH_CG_ACCEL_LAT_SMOOTH,
     CH_CG_ACCEL_LON,
@@ -625,6 +626,10 @@ class DataLog(object):
     def from_accessport_log(self, log_lines):
         from parsers.accessport_parser import parse_accessport_log
         parse_accessport_log(self, log_lines)
+
+    def from_xrk_log(self, xrk_file_path, target_lap=None):
+        from parsers.xrk_parser import parse_xrk_log
+        parse_xrk_log(self, xrk_file_path, target_lap=target_lap)
 
     @staticmethod
     def __parse_can_log_line(line):

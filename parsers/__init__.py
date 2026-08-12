@@ -6,3 +6,4 @@ from parsers.can_parser import parse_can_log
 from parsers.ibt_parser import parse_ibt_log
 from parsers.rcz_parser import parse_rcz_log
 from parsers.accessport_parser import parse_accessport_log
+from parsers.xrk_parser import parse_xrk_log
