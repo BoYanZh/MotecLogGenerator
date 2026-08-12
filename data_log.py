@@ -6,28 +6,13 @@ import math
 import numpy as np
 
 from constants import (
-    CH_ACCELERATOR_POS,
-    CH_BRAKE_POS,
-    CH_BRAKE_PRESS,
     CH_CG_ACCEL_LAT,
-    CH_CG_ACCEL_LAT_SMOOTH,
-    CH_CG_ACCEL_LON,
-    CH_CG_ACCEL_LON_SMOOTH,
     CH_ENGINE_RPM,
-    CH_G_COMBINED,
     CH_GPS_HEADING,
     CH_GPS_LATITUDE,
     CH_GPS_LONGITUDE,
     CH_GROUND_SPEED,
     CH_RUNNING_TIME,
-    CH_SLIP_ANGLE_FL,
-    CH_SLIP_ANGLE_FR,
-    CH_SLIP_ANGLE_RL,
-    CH_SLIP_ANGLE_RR,
-    CH_STEERING_ANGLE,
-    CH_THROTTLE_POS,
-    CH_UNDERSTEER_INDEX,
-    CH_YAW_RATE,
     TRACK_BEACONS,
 )
 from core.interp import _interp_zoh, _mask_interp_gaps
@@ -247,214 +232,12 @@ class DataLog(object):
         return beacons
 
     def calculate_math_channels(self, g_source="auto", kinematics=False,
-                                gear_ratio_thresholds=None):
+                                gear_ratio_thresholds=None,
+                                kinematics_parameters=None):
         from processing.math_channels import calculate_math_channels as _calc
         _calc(self, g_source=g_source, kinematics=kinematics,
-              gear_ratio_thresholds=gear_ratio_thresholds)
-    def _derive_smoothed_accel(self, window_sec=0.5):
-        """ Derive 0.5s moving average smoothed G channels for clean G-G diagrams in MoTeC. """
-        for raw_name, smooth_name in [(CH_CG_ACCEL_LAT, CH_CG_ACCEL_LAT_SMOOTH),
-                                      (CH_CG_ACCEL_LON, CH_CG_ACCEL_LON_SMOOTH)]:
-            if raw_name in self.channels and smooth_name not in self.channels:
-                ch = self.channels[raw_name]
-                if len(ch.messages) < 5:
-                    continue
-                freq = ch.avg_frequency()
-                w = max(1, int(window_sec * freq))
-                vals = np.array([m.value for m in ch.messages], dtype=np.float64)
-
-                padded = np.pad(vals, (w // 2, w - 1 - w // 2), mode="edge")
-                windows = np.lib.stride_tricks.sliding_window_view(padded, w)
-                smoothed = np.mean(windows, axis=1)[:len(vals)]
-
-                self.add_channel(smooth_name, ch.units, float, ch.decimals)
-                self.channels[smooth_name].messages = [
-                    Message(ch.messages[i].timestamp, float(smoothed[i])) for i in range(len(vals))
-                ]
-
-    def _derive_cg_accel_lateral(self, force=False):
-        if not force and CH_CG_ACCEL_LAT in self.channels:
-            return
-        if CH_GROUND_SPEED not in self.channels or CH_YAW_RATE not in self.channels:
-            return
-        spd_chan = self.channels[CH_GROUND_SPEED]
-        yaw_chan = self.channels[CH_YAW_RATE]
-        n = len(spd_chan.messages)
-        if n < 1:
-            return
-        t_arr = np.array([m.timestamp for m in spd_chan.messages])
-        vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
-        yr_rad = np.radians([m.value for m in yaw_chan.messages])
-        ay = (vx_ms * yr_rad) / 9.80665
-        self.add_channel(CH_CG_ACCEL_LAT, "G", float, 2)
-        self.channels[CH_CG_ACCEL_LAT].messages = [Message(t_arr[i], ay[i]) for i in range(n)]
-
-    def _derive_cg_accel_longitudinal(self, force=False):
-        if not force and CH_CG_ACCEL_LON in self.channels:
-            return
-        if CH_GROUND_SPEED not in self.channels:
-            return
-        spd_chan = self.channels[CH_GROUND_SPEED]
-        n = len(spd_chan.messages)
-        if n < 2:
-            return
-        t_arr = np.array([m.timestamp for m in spd_chan.messages])
-        vx_ms = np.array([m.value / 3.6 if spd_chan.units == "km/h" else m.value for m in spd_chan.messages])
-        ax = np.gradient(vx_ms, t_arr) / 9.80665
-        self.add_channel(CH_CG_ACCEL_LON, "G", float, 2)
-        self.channels[CH_CG_ACCEL_LON].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
-
-    _KINEMATICS_STEERING_RATIO = 13.5
-    _KINEMATICS_WHEELBASE_M = 2.575
-    _KINEMATICS_CG_TO_FRONT_AXLE_M = 1.25
-    _KINEMATICS_CG_TO_REAR_AXLE_M = 1.325
-    _KINEMATICS_LAT_VEL_TAU_S = 2.0
-
-    def _calculate_kinematics(self):
-        required = [CH_GROUND_SPEED, CH_CG_ACCEL_LAT, CH_YAW_RATE]
-        if not all(r in self.channels for r in required):
-            return
-        vx_chan = self.channels[CH_GROUND_SPEED]
-        n = min(len(self.channels[r].messages) for r in required)
-        if n < 2:
-            return
-        time = np.array([m.timestamp for m in vx_chan.messages[:n]])
-        vx = np.array([m.value for m in vx_chan.messages[:n]])
-        if vx_chan.units == "km/h":
-            vx /= 3.6
-        ay = np.array([m.value * 9.80665 for m in self.channels[CH_CG_ACCEL_LAT].messages[:n]])
-        yaw_rate_degs = np.array([m.value for m in self.channels[CH_YAW_RATE].messages[:n]])
-        yaw_rate = np.radians(yaw_rate_degs * -1.0)
-
-        dt = np.zeros(n)
-        dt[1:] = np.diff(time)
-
-        vy = np.zeros(n)
-        beta = np.zeros(n)
-        tau = self._KINEMATICS_LAT_VEL_TAU_S
-
-        for i in range(1, n):
-            vy_dot = ay[i] - (vx[i] * yaw_rate[i])
-            alpha = np.exp(-dt[i] / tau)
-            vy[i] = (vy[i - 1] + vy_dot * dt[i]) * alpha
-            if abs(ay[i]) < 0.49 and abs(yaw_rate_degs[i]) < 1.0:
-                vy[i] = 0.0
-            if vx[i] > 5.0:
-                beta[i] = np.arctan2(vy[i], vx[i])
-
-        ratio = self._KINEMATICS_STEERING_RATIO
-        wheelbase = self._KINEMATICS_WHEELBASE_M
-        lf = self._KINEMATICS_CG_TO_FRONT_AXLE_M
-        lr = self._KINEMATICS_CG_TO_REAR_AXLE_M
-
-        slip_f = np.zeros(n)
-        slip_r = np.zeros(n)
-        steer_rad = np.zeros(n)
-        if CH_STEERING_ANGLE in self.channels:
-            steer_deg = np.array([m.value for m in self.channels[CH_STEERING_ANGLE].messages])
-            steer_rad = np.radians(steer_deg / ratio)
-
-        for i in range(n):
-            if vx[i] > 5.0:
-                slip_f[i] = np.degrees(steer_rad[i] - np.arctan2(vy[i] + yaw_rate[i] * lf, vx[i]))
-                slip_r[i] = np.degrees(-np.arctan2(vy[i] - yaw_rate[i] * lr, vx[i]))
-
-        for name in (CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR, CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR):
-            self.add_channel(name, "deg", float, 2)
-            src_data = slip_f if "F" in name else slip_r
-            self.channels[name].messages = [Message(time[i], src_data[i]) for i in range(n)]
-
-        us_index = np.zeros(n)
-        for i in range(n):
-            if vx[i] > 5.0:
-                us_index[i] = np.degrees(steer_rad[i]) - np.degrees(wheelbase * yaw_rate[i] / vx[i])
-        self.add_channel(CH_UNDERSTEER_INDEX, "deg", float, 2)
-        self.channels[CH_UNDERSTEER_INDEX].messages = [Message(time[i], us_index[i]) for i in range(n)]
-
-    def _calculate_g_sum(self):
-        if CH_CG_ACCEL_LON not in self.channels or CH_CG_ACCEL_LAT not in self.channels:
-            return
-        ax_msgs = self.channels[CH_CG_ACCEL_LON].messages
-        ay_msgs = self.channels[CH_CG_ACCEL_LAT].messages
-        n = min(len(ax_msgs), len(ay_msgs))
-        if n < 2:
-            return
-        time_g = [ax_msgs[i].timestamp for i in range(n)]
-        ax = np.array([ax_msgs[i].value for i in range(n)])
-        ay_g = np.array([ay_msgs[i].value for i in range(n)])
-        g_sum = np.sqrt(ax ** 2 + ay_g ** 2)
-        self.add_channel(CH_G_COMBINED, "G", float, 2)
-        self.channels[CH_G_COMBINED].messages = [Message(time_g[i], g_sum[i]) for i in range(n)]
-
-    def _derive_brake_pos(self):
-        if CH_BRAKE_PRESS not in self.channels or CH_BRAKE_POS in self.channels:
-            return
-        press_chan = self.channels[CH_BRAKE_PRESS]
-        n = len(press_chan.messages)
-        if n < 1:
-            return
-        time_p = [m.timestamp for m in press_chan.messages]
-        press_vals = np.array([m.value for m in press_chan.messages])
-        if press_chan.units == "bar":
-            press_vals *= 100.0
-        bpos = np.clip(press_vals / 96.0, 0.0, 100.0)
-        self.add_channel(CH_BRAKE_POS, "%", float, 2)
-        self.channels[CH_BRAKE_POS].messages = [Message(time_p[i], bpos[i]) for i in range(n)]
-
-    def _calculate_input_rates(self):
-        self.__calculate_rate(CH_STEERING_ANGLE, "deg/s")
-        self.__calculate_rate(CH_THROTTLE_POS, "%/s")
-        self.__calculate_rate(CH_BRAKE_POS, "%/s")
-
-    def _mirror_throttle_accel(self):
-        if CH_THROTTLE_POS not in self.channels and CH_ACCELERATOR_POS in self.channels:
-            src = self.channels[CH_ACCELERATOR_POS]
-            self.add_channel(CH_THROTTLE_POS, "%", float, 2)
-            self.channels[CH_THROTTLE_POS].messages = [Message(m.timestamp, m.value) for m in src.messages]
-
-    def __calculate_rate(self, channel_name, unit):
-        """ Internal helper to calculate the rate of change for a channel. """
-        if channel_name in self.channels:
-            chan = self.channels[channel_name]
-            vals = np.array([m.value for m in chan.messages])
-            times = np.array([m.timestamp for m in chan.messages])
-            if len(times) < 2:
-                return
-            rate = np.zeros(len(times))
-            dt = np.diff(times)
-            dt[dt == 0] = 0.001 # Prevent div by zero
-            rate[1:] = np.diff(vals) / dt
-
-            new_name = channel_name + " Rate"
-            self.add_channel(new_name, unit, float, 2)
-            self.channels[new_name].messages = [Message(times[i], rate[i]) for i in range(len(times))]
-
-    def _derive_yaw_rate_from_gps_heading(self):
-        if CH_YAW_RATE in self.channels:
-            return
-        gps_h_chan = self.channels.get(CH_GPS_HEADING)
-        if not gps_h_chan or len(gps_h_chan.messages) < 2:
-            return
-        times = np.array([m.timestamp for m in gps_h_chan.messages])
-        headings = np.array([m.value for m in gps_h_chan.messages])
-        h_unwrapped = np.unwrap(np.radians(headings))
-        h_deg = np.degrees(h_unwrapped)
-        yaw_rate_val = -np.gradient(h_deg, times)
-        freq = gps_h_chan.avg_frequency()
-        w = max(1, int(0.2 * freq))
-        if len(yaw_rate_val) >= w and w > 1:
-            padded = np.pad(yaw_rate_val, (w // 2, w - 1 - w // 2), mode="edge")
-            yaw_rate_val = np.mean(np.lib.stride_tricks.sliding_window_view(padded, w), axis=1)[:len(yaw_rate_val)]
-        spd_chan = self.channels.get(CH_GROUND_SPEED)
-        if spd_chan and len(spd_chan.messages) == len(times):
-            v_vals = np.array([m.value for m in spd_chan.messages])
-            if spd_chan.units == "mph":
-                v_vals *= 1.60934
-            yaw_rate_val[v_vals < 5.0] = 0.0
-        yaw_rate_val = np.clip(yaw_rate_val, -150.0, 150.0)
-        self.add_channel(CH_YAW_RATE, "deg/s", float, 2)
-        self.channels[CH_YAW_RATE].messages = [Message(times[i], yaw_rate_val[i]) for i in range(len(times))]
-        self.metadata["yaw_rate_source"] = "gps_heading_derivative"
+              gear_ratio_thresholds=gear_ratio_thresholds,
+              kinematics_parameters=kinematics_parameters)
 
     def _extract_datetime_from_text(self, log_lines, file_path=""):
         import datetime

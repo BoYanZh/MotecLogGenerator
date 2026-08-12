@@ -1,0 +1,13 @@
+{
+  "name": "2022-2026 Toyota GR86 / Subaru BRZ",
+  "vehicle_id": "Toyota GR86",
+  "vehicle_weight": 1275,
+  "kinematics": {
+    "steering_ratio": 13.5,
+    "wheelbase_m": 2.575,
+    "cg_to_front_axle_m": 1.25,
+    "cg_to_rear_axle_m": 1.325,
+    "lateral_velocity_tau_s": 2.0
+  },
+  "gear_ratio_thresholds": [110.0, 70.0, 52.0, 42.0, 33.0, 20.0]
+}

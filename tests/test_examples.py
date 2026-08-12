@@ -4,12 +4,18 @@ import os
 import sys
 import csv
 import importlib
+import hashlib
+import json
+import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 from unittest import SkipTest
+from unittest.mock import patch
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, ROOT)
 from data_log import DataLog, Message
 
 EXAMPLES = os.path.join(os.path.dirname(__file__), "..", "examples")
@@ -32,6 +38,11 @@ def _import_or_skip(module_name):
         return importlib.import_module(module_name)
     except ImportError as exc:
         raise SkipTest(f"{module_name} not installed") from exc
+
+
+def _sha256(path):
+    with open(path, "rb") as source:
+        return hashlib.sha256(source.read()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -558,6 +569,176 @@ def test_ca9_alignment_defaults_to_no_output():
         pass
     else:
         raise AssertionError("in-place CA-9 replacement must require --force")
+
+
+def test_cli_ld_ldx_roundtrip_and_overwrite_guard():
+    from ldparser.ldparser import ldData
+
+    cli = os.path.join(ROOT, "motec_log_generator.py")
+    source = os.path.join(EXAMPLES, "aim_solo_sample.csv")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, "roundtrip.ld")
+        command = [
+            sys.executable, cli, source, "RACECHRONO",
+            "--output", output,
+        ]
+
+        first = subprocess.run(command, capture_output=True, text=True, cwd=ROOT)
+        assert first.returncode == 0, first.stdout + first.stderr
+
+        ldx_path = os.path.splitext(output)[0] + ".ldx"
+        assert os.path.isfile(output)
+        assert os.path.isfile(ldx_path)
+
+        parsed = ldData.fromfile(output)
+        assert parsed.channs
+        for channel in parsed.channs:
+            values = channel.data
+            assert len(values) == channel.data_len
+        root = ET.parse(ldx_path).getroot()
+        assert root.tag == "LDXFile"
+
+        before = {path: _sha256(path) for path in (output, ldx_path)}
+        blocked = subprocess.run(command, capture_output=True, text=True, cwd=ROOT)
+        assert blocked.returncode != 0
+        assert "already exists" in (blocked.stdout + blocked.stderr).lower()
+        after = {path: _sha256(path) for path in (output, ldx_path)}
+        assert after == before
+
+        profile_path = os.path.join(ROOT, "vehicle_profiles", "gr86.json")
+        forced = subprocess.run(
+            command + ["--force", "--kinematics", "--vehicle-profile", profile_path],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert forced.returncode == 0, forced.stdout + forced.stderr
+        parsed = ldData.fromfile(output)
+        assert parsed.head.vehicleid == "Toyota GR86"
+        assert "Understeer Index" in [channel.name for channel in parsed.channs]
+
+
+def test_atomic_output_verification_failure_preserves_existing_files():
+    from core.output import atomic_write_motec_pair, ensure_output_targets
+    from motec_log import MotecLog
+
+    log = DataLog()
+    log.add_channel("Ground Speed", "km/h", float, 2)
+    log.channels["Ground Speed"].set_samples([0.0, 1.0], [10.0, 20.0])
+    motec = MotecLog()
+    motec.initialize()
+    motec.add_all_channels(log)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        ld_path = os.path.join(tmp_dir, "existing.ld")
+        ldx_path = os.path.join(tmp_dir, "existing.ldx")
+        with open(ld_path, "wb") as output:
+            output.write(b"old ld")
+        with open(ldx_path, "wb") as output:
+            output.write(b"old ldx")
+
+        with patch("core.output.verify_motec_pair", side_effect=RuntimeError("bad staged file")):
+            try:
+                atomic_write_motec_pair(motec, log, ld_path, ldx_path)
+            except RuntimeError as exc:
+                assert "bad staged file" in str(exc)
+            else:
+                raise AssertionError("verification failure must abort output replacement")
+
+        with open(ld_path, "rb") as output:
+            assert output.read() == b"old ld"
+        with open(ldx_path, "rb") as output:
+            assert output.read() == b"old ldx"
+        assert not [name for name in os.listdir(tmp_dir) if name.startswith(".motec_")]
+
+        real_replace = os.replace
+        replace_calls = 0
+
+        def fail_second_replace(source, target):
+            nonlocal replace_calls
+            replace_calls += 1
+            if replace_calls == 2:
+                raise PermissionError("second target locked")
+            return real_replace(source, target)
+
+        with patch("core.output.os.replace", side_effect=fail_second_replace):
+            try:
+                atomic_write_motec_pair(motec, log, ld_path, ldx_path)
+            except PermissionError as exc:
+                assert "second target locked" in str(exc)
+            else:
+                raise AssertionError("second replace failure must abort the pair commit")
+
+        with open(ld_path, "rb") as output:
+            assert output.read() == b"old ld"
+        with open(ldx_path, "rb") as output:
+            assert output.read() == b"old ldx"
+        assert not [name for name in os.listdir(tmp_dir) if name.startswith(".motec_")]
+
+        try:
+            ensure_output_targets([ld_path], force=True, source_path=ld_path)
+        except ValueError as exc:
+            assert "input file" in str(exc)
+        else:
+            raise AssertionError("--force must never replace the source input")
+
+
+def test_vehicle_profile_configures_kinematics():
+    from motec_log_generator import load_vehicle_profile
+    from processing.vehicle_profile import validate_vehicle_profile
+    from processing.math_channels import calculate_kinematics
+
+    profile_doc = {
+        "name": "test car",
+        "kinematics": {
+            "steering_ratio": 10.0,
+            "wheelbase_m": 3.0,
+            "cg_to_front_axle_m": 1.4,
+            "cg_to_rear_axle_m": 1.6,
+            "lateral_velocity_tau_s": 1.0,
+        },
+        "gear_ratio_thresholds": [120, 80, 60, 45, 35, 22],
+    }
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False,
+                                     encoding="utf-8") as tmp:
+        json.dump(profile_doc, tmp)
+        profile_path = tmp.name
+    try:
+        profile = load_vehicle_profile(profile_path)
+    finally:
+        os.remove(profile_path)
+
+    log = DataLog()
+    samples = [0.0, 1.0, 2.0]
+    for name, unit, values in (
+        ("Ground Speed", "km/h", [72.0, 72.0, 72.0]),
+        ("CG Accel Lateral", "G", [0.5, 0.5, 0.5]),
+        ("Chassis Yaw Rate", "deg/s", [10.0, 10.0, 10.0]),
+        ("Steering Angle", "deg", [100.0, 100.0, 100.0]),
+    ):
+        log.add_channel(name, unit, float, 2)
+        log.channels[name].set_samples(samples, values)
+
+    calculate_kinematics(log, parameters=profile["kinematics"])
+    assert "Understeer Index" in log.channels
+    expected = 10.0 - np.degrees(3.0 * np.radians(-10.0) / 20.0)
+    assert abs(log.channels["Understeer Index"].values[-1] - expected) < 1e-9
+
+    try:
+        validate_vehicle_profile({"kinematics": {"wheelbase_m": 3.0}})
+    except ValueError as exc:
+        assert "missing fields" in str(exc)
+    else:
+        raise AssertionError("incomplete kinematics profile must be rejected")
+
+
+def test_csv_auxiliary_export_does_not_replace_source():
+    from motec_log_generator import _csv_output_path
+
+    source = os.path.join("logs", "session.csv")
+    assert _csv_output_path(os.path.join("logs", "session.ld"), source).endswith(
+        "session_export.csv"
+    )
 
 
 

@@ -13,6 +13,7 @@ from constants import (
     CH_CG_ACCEL_LON, CH_GROUND_SPEED, CH_GPS_LATITUDE, CH_GPS_LONGITUDE,
     CH_GPS_HEADING, CH_GPS_ALTITUDE, CH_LEAN_ANGLE,
 )
+from processing.math_channels import derive_yaw_rate_from_gps_heading
 
 def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, min_lap_sec=15.0, mask_interp_gaps=False):
     """ Creates channels populated with messages directly from a RaceChrono .rcz archive.
@@ -537,4 +538,4 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
                         populate_channel(ch_name, ch_unit, processed)
 
     # Fallback for Chassis Yaw Rate if missing
-    data_log._derive_yaw_rate_from_gps_heading()
+    derive_yaw_rate_from_gps_heading(data_log)

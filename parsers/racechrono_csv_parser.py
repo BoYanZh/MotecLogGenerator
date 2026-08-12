@@ -16,6 +16,7 @@ from constants import (
     CH_GPS_SATS, CH_G_COMBINED, CH_INTAKE_TEMP, CH_VEHICLE_SPEED, CH_ENGINE_OIL_PRESS,
     CH_WHEEL_SPEED_FL, CH_WHEEL_SPEED_FR, CH_WHEEL_SPEED_RL, CH_WHEEL_SPEED_RR,
 )
+from processing.math_channels import derive_yaw_rate_from_gps_heading
 
 def parse_racechrono_log(data_log, log_lines, target_lap=None):
     """ Creates channels populated with messages from a RaceChrono CSV log file.
@@ -263,7 +264,7 @@ def parse_racechrono_log(data_log, log_lines, target_lap=None):
             data_log.channels[name].set_samples(ts_buf, val_buf)
 
     # Fallback: derive Chassis Yaw Rate from GPS Heading derivative if missing
-    data_log._derive_yaw_rate_from_gps_heading()
+    derive_yaw_rate_from_gps_heading(data_log)
 
     # Construct laps_info summary (with Out Lap and In Lap)
     header_beacons = []

@@ -23,6 +23,10 @@ Generated log files automatically include the MoTeC Pro Analysis magic flag (`0x
   * **0.2s Kinematic Low-Pass Filter**: Eliminates high-speed GPS derivative jitter while preserving 100% of vehicle dynamics.
   * **Stationary Speed Guard**: Guards low-speed/stationary GPS wander ($v < 5\text{ km/h} \implies 0\text{ deg/s}$).
   * **Advanced Math Channels**: Computes `Tire Slip Angle FL/FR/RL/RR`, `Understeer Index`, `G Force Combined`, `Chassis Yaw Rate`, and 0.5s moving average smoothed G channels.
+  * **Reusable Vehicle Profiles**: Loads validated JSON steering ratio, wheelbase, CG position, filter, metadata, and gear-ratio settings so non-GR86 vehicles do not rely on the built-in defaults.
+* **Safe Output Pipeline**:
+  * Writes `.ld` and `.ldx` to temporary files, reads both back for binary/XML verification, then replaces the final files.
+  * Refuses to overwrite existing outputs unless `--force` is supplied and never replaces the source input. CSV inputs use `_export.csv` for auxiliary CSV output.
 * **Sim & Real-World Overlay Compatibility**:
   * Fully coordinate-aligned with Assetto Corsa ACTI simulator logs for side-by-side real vs. sim telemetry comparison in MoTeC i2 Pro.
 
@@ -110,36 +114,46 @@ python motec_log_generator.py /path/to/session.fit FIT --csv --csv-wallclock
 ```
 *Writes all resampled channels as a tabular CSV with a header row of MoTeC channel names (Time, GPS Latitude/Longitude, Speed, Engine RPM, ...). Importable by AIM RaceStudio / RaceChrono RaceStudio CSV import wizards or Excel. Use `--csv-wallclock` to write Unix wall-clock timestamps instead of elapsed seconds.*
 
+### 9. Vehicle-Specific Kinematics
+
+```bash
+python motec_log_generator.py /path/to/session.csv AUTO \
+  --kinematics \
+  --vehicle-profile vehicle_profiles/gr86.json
+```
+
+The profile controls `steering_ratio`, `wheelbase_m`, front/rear CG-to-axle
+distance, lateral-velocity filter time constant, and optional gear-ratio
+thresholds. `--gear-ratio-thresholds` takes precedence when both are supplied.
+Without a profile, `--kinematics` retains the built-in GR86/BRZ parameters and
+prints a warning. The included
+[`vehicle_profiles/gr86.json`](vehicle_profiles/gr86.json) is the reference
+profile; copy it when defining another vehicle.
+
+### Output Replacement
+
+Existing `.ld`, `.ldx`, and requested auxiliary outputs are preserved by
+default. Pass `--force` only when replacement is intentional:
+
+```bash
+python motec_log_generator.py session.fit AUTO --output converted.ld --force
+```
+
 ---
 
 ## Command Line Options
 
-```text
-usage: motec_log_generator.py [-h] [--output OUTPUT] [--g-source {auto,sensor,calc}]
-                              [--frequency FREQUENCY] [--min_lap_sec MIN_LAP_SEC]
-                              [--lap LAP] [--stint STINT] [--driver DRIVER]
-                              [--vehicle_id VEHICLE_ID] [--venue_name VENUE_NAME]
-                              [--event_name EVENT_NAME]
-                              log {CAN,CSV,ACCESSPORT,RACECHRONO,RCZ,PBBUDDY,IBT,AUTO}
+The current input choices are `CAN`, `CSV`, `ACCESSPORT`, `RACECHRONO`, `RCZ`,
+`PBBUDDY`, `VBO`, `IBT`, `XRK`, `FIT`, and `AUTO`. Run the CLI for the complete,
+non-duplicated option reference:
 
-Options:
-  --output OUTPUT          Path for output .ld file (default: same directory as input log)
-  --g-source MODE          G-force channel source: 'auto' (use IMU sensor if present, fallback to GPS calc),
-                           'sensor' (only IMU sensor), or 'calc' (force derive from GPS) (default: auto)
-  --frequency FREQUENCY    Fixed frequency to resample all channels at or 'auto' (default: auto)
-  --gear-ratio-thresholds  Six descending RPM/km/h thresholds for derived gears 1-6
-  --gpx                    Generate GPX track file (default: false)
-  --kml                    Generate KML Google Earth track file (default: false)
-  --csv                    Generate CSV data file for RaceStudio / Excel import (default: false)
-  --csv-wallclock          Write Unix wall-clock timestamps in CSV instead of elapsed seconds (default: false)
-  --min_lap_sec MIN_LAP    Minimum valid lap duration in seconds to filter noise (default: 15.0s)
-  --mask-interp-gaps       Mask sample interpolation gaps (>1s) with NaN instead of interpolating through them (default: false)
-  --lap LAP                Specific lap number to export (e.g. 1, 15) or 'all' (default: all)
-  --stint STINT            Specific RCZ stint to export or 'all' for auto-split (default: all)
-  --driver DRIVER          Driver name metadata (auto-extracted from log if omitted)
-  --vehicle_id VEHICLE_ID  Vehicle model metadata (auto-extracted from log if omitted)
-  --venue_name VENUE_NAME  Track venue metadata (auto-extracted from log if omitted)
+```bash
+python motec_log_generator.py --help
 ```
+
+Key safety and dynamics options are `--output`, `--force`, `--kinematics`,
+`--vehicle-profile`, `--gear-ratio-thresholds`, `--frequency`, and
+`--mask-interp-gaps`.
 
 ---
 
@@ -148,6 +162,9 @@ Options:
 * **`motec_log_generator.py`**: Main CLI entry point.
 * **`data_log.py`**: Telemetry engine for parsing, resampling, filtering, and calculating advanced vehicle dynamics.
 * **`motec_log.py`**: MoTeC binary `.ld` header packer and `.ldx` XML beacon generator.
+* **`core/output.py`**: Temporary write, binary/XML read-back verification, and recoverable final-file replacement.
+* **`processing/vehicle_profile.py`**: JSON vehicle profile validation.
+* **`vehicle_profiles/`**: Reusable vehicle dynamics profiles, including the GR86/BRZ example.
 * **`ldparser/`**: Low-level MoTeC `.ld` binary file parser/writer module.
 * **`can_utils/`**: CAN bus helper utilities (`list_can_ids.py`).
 * **`tools/`**: Helper scripts & analysis tools (`verify_log.py`, `convert_iracing_mu.py`, `convert_acti_log.py`, `analyze_tire_grip.py`, `analyze_lap_comparison.py`, `analyze_corner_time_loss.py`). See [`tools/README.md`](tools/README.md).
@@ -174,15 +191,17 @@ See [`tools/README.md`](tools/README.md) for detailed documentation.
 ## Running Tests
 
 ```bash
-# Run unit test suite (no extra dependencies required)
+# Run available tests; optional parser tests are reported as skipped when their dependency is absent
 python tests/test_examples.py
 
-# Or with pytest (optional)
-pip install pytest
-pytest tests/
+# Install every parser dependency and run the complete CI-equivalent suite
+pip install -r requirements-dev.txt
+python -m pytest -q
 ```
 
-Tests cover all input types (CAN/CSV/ACCESSPORT/RACECHRONO/PBBUDDY/AIM), resampling, math channels, G-force filtering, discrete value handling, and FIR filter design.
+Tests cover all supported input families, resampling, math channels, vehicle
+profiles, CSV export, verified `.ld`/`.ldx` CLI round trips, overwrite protection,
+and cleanup when staged-output verification fails.
 
 ---
 

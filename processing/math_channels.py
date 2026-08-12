@@ -28,10 +28,18 @@ from constants import (
 
 
 DEFAULT_GEAR_RATIO_THRESHOLDS = (110.0, 70.0, 52.0, 42.0, 33.0, 20.0)
+DEFAULT_KINEMATICS_PARAMETERS = {
+    "steering_ratio": 13.5,
+    "wheelbase_m": 2.575,
+    "cg_to_front_axle_m": 1.25,
+    "cg_to_rear_axle_m": 1.325,
+    "lateral_velocity_tau_s": 2.0,
+}
 
 
 def calculate_math_channels(data_log, g_source="auto", kinematics=False,
-                            gear_ratio_thresholds=None):
+                            gear_ratio_thresholds=None,
+                            kinematics_parameters=None):
     """
     g_source: "auto" (default), "sensor", or "calc"
       - "auto": Use raw IMU sensor G channels if present; otherwise derive from GPS.
@@ -55,7 +63,7 @@ def calculate_math_channels(data_log, g_source="auto", kinematics=False,
 
     derive_smoothed_accel(data_log)
     if kinematics:
-        calculate_kinematics(data_log)
+        calculate_kinematics(data_log, parameters=kinematics_parameters)
     calculate_g_sum(data_log)
     derive_brake_pos(data_log)
     calculate_input_rates(data_log)
@@ -184,14 +192,10 @@ def derive_cg_accel_longitudinal(data_log, force=False):
     data_log.channels[CH_CG_ACCEL_LON].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
 
 
-_KINEMATICS_STEERING_RATIO = 13.5
-_KINEMATICS_WHEELBASE_M = 2.575
-_KINEMATICS_CG_TO_FRONT_AXLE_M = 1.25
-_KINEMATICS_CG_TO_REAR_AXLE_M = 1.325
-_KINEMATICS_LAT_VEL_TAU_S = 2.0
-
-
-def calculate_kinematics(data_log):
+def calculate_kinematics(data_log, parameters=None):
+    config = dict(DEFAULT_KINEMATICS_PARAMETERS)
+    if parameters:
+        config.update(parameters)
     required = [CH_GROUND_SPEED, CH_CG_ACCEL_LAT, CH_YAW_RATE]
     if not all(r in data_log.channels for r in required):
         return
@@ -212,7 +216,7 @@ def calculate_kinematics(data_log):
 
     vy = np.zeros(n)
     beta = np.zeros(n)
-    tau = 2.0
+    tau = config["lateral_velocity_tau_s"]
 
     for i in range(1, n):
         vy_dot = ay[i] - (vx[i] * yaw_rate[i])
@@ -223,16 +227,18 @@ def calculate_kinematics(data_log):
         if vx[i] > 5.0:
             beta[i] = np.arctan2(vy[i], vx[i])
 
-    ratio = 13.5
-    wheelbase = 2.575
-    lf = 1.25
-    lr = 1.325
+    ratio = config["steering_ratio"]
+    wheelbase = config["wheelbase_m"]
+    lf = config["cg_to_front_axle_m"]
+    lr = config["cg_to_rear_axle_m"]
 
     slip_f = np.zeros(n)
     slip_r = np.zeros(n)
     steer_rad = np.zeros(n)
     if CH_STEERING_ANGLE in data_log.channels:
-        steer_deg = np.array([m.value for m in data_log.channels[CH_STEERING_ANGLE].messages])
+        steer_deg = np.array([
+            m.value for m in data_log.channels[CH_STEERING_ANGLE].messages[:n]
+        ])
         steer_rad = np.radians(steer_deg / ratio)
 
     for i in range(n):
