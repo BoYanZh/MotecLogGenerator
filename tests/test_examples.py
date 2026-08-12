@@ -438,6 +438,28 @@ def test_xrk_smoke():
     _dedup_channels(log)
 
 
+# ---------------------------------------------------------------------------
+# Garmin FIT
+# ---------------------------------------------------------------------------
+def test_fit_smoke():
+    pytest = pytest_if_available()
+    if pytest is None:
+        return
+
+    try:
+        import fitparse  # noqa: F401
+    except ImportError:
+        pytest.skip("fitparse not installed")
+
+    log = DataLog()
+    log.from_fit_log(os.path.join(EXAMPLES, "garmin_sample.fit"))
+    assert len(log.channels) >= 5, f"Too few channels: {len(log.channels)}"
+    assert "GPS Latitude" in log.channels
+    assert "GPS Longitude" in log.channels
+    assert log.duration() > 0
+    _dedup_channels(log)
+
+
 
 if __name__ == "__main__":
     # Run all test_* functions directly without pytest

@@ -1,6 +1,6 @@
 # MotecLogGenerator
 
-A high-performance Python utility for generating MoTeC `.ld` / `.ldx` log files from external telemetry sources (iRacing `.ibt`, RaceChrono `.rcz`, AIM `.xrk`/`.xrz`, AiM Solo / RaceStudio, Racelogic VBOX, COBB Accessport, PB Buddy, CAN bus logs, and generic CSVs).
+A high-performance Python utility for generating MoTeC `.ld` / `.ldx` log files from external telemetry sources (iRacing `.ibt`, RaceChrono `.rcz`, AIM `.xrk`/`.xrz`, Garmin `.fit`, AiM Solo / RaceStudio, Racelogic VBOX, COBB Accessport, PB Buddy, CAN bus logs, and generic CSVs). 
 
 Generated log files automatically include the MoTeC Pro Analysis magic flag (`0xc81a4`), allowing them to be opened natively in both **MoTeC i2 Standard** and **MoTeC i2 Pro** with all advanced math and Pro features unlocked.
 
@@ -13,6 +13,7 @@ Generated log files automatically include the MoTeC Pro Analysis magic flag (`0x
   * **Racelogic VBOX `.vbo` Logs**: Parses NMEA latitude/longitude, velocity, 10Hz/20Hz/100Hz IMU accelerometers, gyroscopes, and CAN bus channels.
   * **RaceChrono Native `.rcz` Archives**: Direct binary unzipping, multi-stint auto-splitting, microsecond time-drift correction, and 20Hz/25Hz GPS.
   * **AIM `.xrk` / `.xrz` Native Logs**: Direct binary parsing of AIM data logger files (via `libxrk`), including compressed `.xrz` archives, GPS/lap detection, and driver/vehicle/venue metadata.
+  * **Garmin `.fit` Native Logs**: Decodes Garmin Catalyst / watch / Edge FIT files (via `fitparse`) with GPS, speed, heart rate, power, cadence, and lap boundaries.
   * **PB Buddy & Generic CSVs**: Auto-detects custom column names, speed units (`mph` $\to$ `km/h`), and heading angles.
   * **COBB Accessport CSVs**: Resamples ECU channels cleanly without zero-order hold gaps.
   * **AiM Solo / RaceStudio CSVs**: Auto-maps `PPS`, `SteerAngle`, `BrakePress`, `RPM`, `Gear`, temperatures, and lap beacon markers.
@@ -30,13 +31,14 @@ Generated log files automatically include the MoTeC Pro Analysis magic flag (`0x
 ## Python Version & Dependencies
 
 * **Python Version**: Python 3.8 or higher (3.8 ~ 3.12+)
-* **Dependencies**: `numpy` (required), `cantools` (only required for CAN bus log type), `libxrk` (only required for AIM `.xrk`/`.xrz` log type)
+* **Dependencies**: `numpy` (required), `cantools` (only required for CAN bus log type), `libxrk` (only required for AIM `.xrk`/`.xrz` log type), `fitparse` (only required for Garmin `.fit` log type)
 
 Install dependencies via pip:
 ```bash
 pip install numpy
 pip install cantools  # only needed for CAN bus log processing
 pip install libxrk    # only needed for AIM XRK/XRZ log processing
+pip install fitparse  # only needed for Garmin FIT log processing
 ```
 
 ---
@@ -72,14 +74,22 @@ python motec_log_generator.py /path/to/session.xrz AUTO
 ```
 *Binary parser backed by [`libxrk`](https://github.com/m3rlin45/libxrk). Auto-extracts laps, driver/vehicle/venue metadata, and standard channels (GPS, RPM, speed, G-forces).*
 
-### 5. Automatic Log Type Detection (`AUTO`)
+### 5. Garmin `.fit` Native Logs
 ```bash
-# Auto-detect log format (IBT, RCZ, XRK/XRZ, PB Buddy, AiM, RaceChrono, Accessport, etc.)
+# Convert Garmin Catalyst / watch / Edge FIT file
+python motec_log_generator.py /path/to/session.fit FIT
+python motec_log_generator.py /path/to/session.fit AUTO
+```
+*Decoder backed by [`fitparse`](https://github.com/dtcooper/python-fitparse). Extracts GPS, speed, altitude, heart rate, power, cadence, and lap boundaries.*
+
+### 6. Automatic Log Type Detection (`AUTO`)
+```bash
+# Auto-detect log format (IBT, RCZ, XRK/XRZ, FIT, PB Buddy, AiM, RaceChrono, Accessport, etc.)
 python motec_log_generator.py /path/to/session.ibt AUTO
 python motec_log_generator.py /path/to/session_export.csv AUTO
 ```
 
-### 6. CAN Bus & Accessport Logs
+### 7. CAN Bus & Accessport Logs
 ```bash
 python motec_log_generator.py /path/to/can_data.log CAN --dbc /path/to/car.dbc
 python motec_log_generator.py /path/to/accessport.csv ACCESSPORT
