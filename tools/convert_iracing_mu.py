@@ -17,7 +17,7 @@ MoTeC .ld / .ldx files with:
       - CH_ENGINE_RPM ("Engine RPM")
       - CH_GEAR ("Gear")
       - CH_LAP_NUMBER ("Lap Number")
-  - Advanced vehicle dynamics math channels (Slip Angle, Understeer Index, Yaw Rate, G Combined).
+  - Generic derived channels (Yaw Rate and G Combined).
   - 94%+ file size reduction for fast MoTeC i2 loading.
 """
 

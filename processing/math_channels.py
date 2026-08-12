@@ -16,30 +16,14 @@ from constants import (
     CH_GPS_HEADING,
     CH_GROUND_SPEED,
     CH_G_COMBINED,
-    CH_SLIP_ANGLE_FL,
-    CH_SLIP_ANGLE_FR,
-    CH_SLIP_ANGLE_RL,
-    CH_SLIP_ANGLE_RR,
     CH_STEERING_ANGLE,
     CH_THROTTLE_POS,
-    CH_UNDERSTEER_INDEX,
     CH_YAW_RATE,
 )
 
 
 DEFAULT_GEAR_RATIO_THRESHOLDS = (110.0, 70.0, 52.0, 42.0, 33.0, 20.0)
-DEFAULT_KINEMATICS_PARAMETERS = {
-    "steering_ratio": 13.5,
-    "wheelbase_m": 2.575,
-    "cg_to_front_axle_m": 1.25,
-    "cg_to_rear_axle_m": 1.325,
-    "lateral_velocity_tau_s": 2.0,
-}
-
-
-def calculate_math_channels(data_log, g_source="auto", kinematics=False,
-                            gear_ratio_thresholds=None,
-                            kinematics_parameters=None):
+def calculate_math_channels(data_log, g_source="auto", gear_ratio_thresholds=None):
     """
     g_source: "auto" (default), "sensor", or "calc"
       - "auto": Use raw IMU sensor G channels if present; otherwise derive from GPS.
@@ -62,8 +46,6 @@ def calculate_math_channels(data_log, g_source="auto", kinematics=False,
         derive_cg_accel_longitudinal(data_log, force=False)
 
     derive_smoothed_accel(data_log)
-    if kinematics:
-        calculate_kinematics(data_log, parameters=kinematics_parameters)
     calculate_g_sum(data_log)
     derive_brake_pos(data_log)
     calculate_input_rates(data_log)
@@ -192,73 +174,6 @@ def derive_cg_accel_longitudinal(data_log, force=False):
     data_log.channels[CH_CG_ACCEL_LON].messages = [Message(t_arr[i], ax[i]) for i in range(n)]
 
 
-def calculate_kinematics(data_log, parameters=None):
-    config = dict(DEFAULT_KINEMATICS_PARAMETERS)
-    if parameters:
-        config.update(parameters)
-    required = [CH_GROUND_SPEED, CH_CG_ACCEL_LAT, CH_YAW_RATE]
-    if not all(r in data_log.channels for r in required):
-        return
-    vx_chan = data_log.channels[CH_GROUND_SPEED]
-    n = min(len(data_log.channels[r].messages) for r in required)
-    if n < 2:
-        return
-    time = np.array([m.timestamp for m in vx_chan.messages[:n]])
-    vx = np.array([m.value for m in vx_chan.messages[:n]])
-    if vx_chan.units == "km/h":
-        vx /= 3.6
-    ay = np.array([m.value * 9.80665 for m in data_log.channels[CH_CG_ACCEL_LAT].messages[:n]])
-    yaw_rate_degs = np.array([m.value for m in data_log.channels[CH_YAW_RATE].messages[:n]])
-    yaw_rate = np.radians(yaw_rate_degs * -1.0)
-
-    dt = np.zeros(n)
-    dt[1:] = np.diff(time)
-
-    vy = np.zeros(n)
-    beta = np.zeros(n)
-    tau = config["lateral_velocity_tau_s"]
-
-    for i in range(1, n):
-        vy_dot = ay[i] - (vx[i] * yaw_rate[i])
-        alpha = np.exp(-dt[i] / tau)
-        vy[i] = (vy[i - 1] + vy_dot * dt[i]) * alpha
-        if abs(ay[i]) < 0.49 and abs(yaw_rate_degs[i]) < 1.0:
-            vy[i] = 0.0
-        if vx[i] > 5.0:
-            beta[i] = np.arctan2(vy[i], vx[i])
-
-    ratio = config["steering_ratio"]
-    wheelbase = config["wheelbase_m"]
-    lf = config["cg_to_front_axle_m"]
-    lr = config["cg_to_rear_axle_m"]
-
-    slip_f = np.zeros(n)
-    slip_r = np.zeros(n)
-    steer_rad = np.zeros(n)
-    if CH_STEERING_ANGLE in data_log.channels:
-        steer_deg = np.array([
-            m.value for m in data_log.channels[CH_STEERING_ANGLE].messages[:n]
-        ])
-        steer_rad = np.radians(steer_deg / ratio)
-
-    for i in range(n):
-        if vx[i] > 5.0:
-            slip_f[i] = np.degrees(steer_rad[i] - np.arctan2(vy[i] + yaw_rate[i] * lf, vx[i]))
-            slip_r[i] = np.degrees(-np.arctan2(vy[i] - yaw_rate[i] * lr, vx[i]))
-
-    for name in (CH_SLIP_ANGLE_FL, CH_SLIP_ANGLE_FR, CH_SLIP_ANGLE_RL, CH_SLIP_ANGLE_RR):
-        data_log.add_channel(name, "deg", float, 2)
-        src_data = slip_f if "F" in name else slip_r
-        data_log.channels[name].messages = [Message(time[i], src_data[i]) for i in range(n)]
-
-    us_index = np.zeros(n)
-    for i in range(n):
-        if vx[i] > 5.0:
-            us_index[i] = np.degrees(steer_rad[i]) - np.degrees(wheelbase * yaw_rate[i] / vx[i])
-    data_log.add_channel(CH_UNDERSTEER_INDEX, "deg", float, 2)
-    data_log.channels[CH_UNDERSTEER_INDEX].messages = [Message(time[i], us_index[i]) for i in range(n)]
-
-
 def calculate_g_sum(data_log):
     if CH_CG_ACCEL_LON not in data_log.channels or CH_CG_ACCEL_LAT not in data_log.channels:
         return
@@ -354,7 +269,6 @@ def derive_yaw_rate_from_gps_heading(data_log):
 _derive_smoothed_accel = derive_smoothed_accel
 _derive_cg_accel_lateral = derive_cg_accel_lateral
 _derive_cg_accel_longitudinal = derive_cg_accel_longitudinal
-_calculate_kinematics = calculate_kinematics
 _calculate_g_sum = calculate_g_sum
 _derive_brake_pos = derive_brake_pos
 _calculate_input_rates = calculate_input_rates

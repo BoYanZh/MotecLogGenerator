@@ -54,15 +54,40 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
     """ Creates channels populated with messages from a Garmin .fit log file. """
     try:
         import fitparse
+        from fitparse.processors import UTC_REFERENCE
     except ImportError:
         print("ERROR: 'fitparse' package is required for .fit log processing.")
         print("  Install with: pip install fitparse")
         return
 
+    class _NaiveUtcDataProcessor(fitparse.FitFileDataProcessor):
+        """Preserve fitparse's naive-UTC API without deprecated conversions."""
+
+        @staticmethod
+        def _to_naive_utc(value):
+            return datetime.datetime.fromtimestamp(
+                UTC_REFERENCE + value,
+                datetime.timezone.utc,
+            ).replace(tzinfo=None)
+
+        def process_type_date_time(self, field_data):
+            value = field_data.value
+            if value is not None and value >= 0x10000000:
+                field_data.value = self._to_naive_utc(value)
+                field_data.units = None
+
+        def process_type_local_date_time(self, field_data):
+            if field_data.value is not None:
+                field_data.value = self._to_naive_utc(field_data.value)
+                field_data.units = None
+
     data_log.clear()
     data_log.laps_info = {}
 
-    fit = fitparse.FitFile(fit_file_path)
+    fit = fitparse.FitFile(
+        fit_file_path,
+        data_processor=_NaiveUtcDataProcessor(),
+    )
 
     # ---- metadata ----
     for msg in fit.get_messages("file_id"):

@@ -16,7 +16,7 @@ python tools/verify_log.py /path/to/generated_log.ld
 ### What `verify_log.py` Validates:
 * **Binary Header Integrity**: Unpacks MoTeC `.ld` binary headers and verifies driver, vehicle, track venue, and datetime metadata.
 * **Channel Data & Bounds**: Checks sample counts, detects `NaN`/`Inf` anomalies, and validates physical bounds (e.g. GPS Latitude in `[-90, 90]`, Longitude in `[-180, 180]`).
-* **Advanced Math Channels**: Confirms presence of pre-calculated vehicle dynamics channels (`Tire Slip Angle FL/FR/RL/RR`, `Understeer Index`, `G Force Combined`).
+* **Derived Math Channels**: Confirms presence of the generic `G Force Combined` channel.
 * **XML Lap Beacon Alignment (`.ldx`)**: Parses companion `.ldx` files to verify lap beacon timestamp sorting, fastest lap times, and total lap counts.
 
 ---

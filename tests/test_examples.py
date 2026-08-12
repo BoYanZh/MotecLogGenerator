@@ -8,6 +8,7 @@ import hashlib
 import json
 import subprocess
 import tempfile
+import warnings
 import xml.etree.ElementTree as ET
 from unittest import SkipTest
 from unittest.mock import patch
@@ -43,6 +44,66 @@ def _import_or_skip(module_name):
 def _sha256(path):
     with open(path, "rb") as source:
         return hashlib.sha256(source.read()).hexdigest()
+
+
+def _assert_cli_roundtrip(source, log_type):
+    from ldparser.ldparser import ldData
+
+    cli = os.path.join(ROOT, "motec_log_generator.py")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, f"{log_type.lower()}_roundtrip.ld")
+        result = subprocess.run(
+            [
+                sys.executable,
+                cli,
+                source,
+                log_type,
+                "--output",
+                output,
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+        ldx_path = os.path.splitext(output)[0] + ".ldx"
+        assert os.path.isfile(output)
+        assert os.path.isfile(ldx_path)
+        parsed = ldData.fromfile(output)
+        assert parsed.channs
+        assert all(channel.data_len > 0 for channel in parsed.channs)
+        assert ET.parse(ldx_path).getroot().tag == "LDXFile"
+
+
+def _write_minimal_rcz(path):
+    import zipfile
+
+    first_timestamp = 1_700_000_000_000
+    timestamps = np.arange(first_timestamp, first_timestamp + 500, 100, dtype="<i8")
+    speed = np.array([10_000, 12_000, 14_000, 16_000, 18_000], dtype="<i4")
+    lat_lon = np.array(
+        [
+            [222_000_000, -732_000_000],
+            [222_000_006, -731_999_994],
+            [222_000_012, -731_999_988],
+            [222_000_018, -731_999_982],
+            [222_000_024, -731_999_976],
+        ],
+        dtype="<i4",
+    )
+    session = {
+        "firstTimestamp": first_timestamp,
+        "timeCreated": first_timestamp,
+        "trackName": "Synthetic Test Track",
+        "title": "CLI RCZ Test",
+        "laps": [],
+    }
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("session.json", json.dumps(session))
+        archive.writestr("channel_1_300_0_1_1", timestamps.tobytes())
+        archive.writestr("channel_1_300_0_4_0", speed.tobytes())
+        archive.writestr("channel_1_300_0_3_1", lat_lon.tobytes())
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +516,9 @@ def test_fit_smoke():
     _import_or_skip("fitparse")
 
     log = DataLog()
-    log.from_fit_log(os.path.join(EXAMPLES, "garmin_sample.fit"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        log.from_fit_log(os.path.join(EXAMPLES, "garmin_sample.fit"))
     assert len(log.channels) >= 5, f"Too few channels: {len(log.channels)}"
     assert "GPS Latitude" in log.channels
     assert "GPS Longitude" in log.channels
@@ -605,9 +668,14 @@ def test_cli_ld_ldx_roundtrip_and_overwrite_guard():
         after = {path: _sha256(path) for path in (output, ldx_path)}
         assert after == before
 
-        profile_path = os.path.join(ROOT, "vehicle_profiles", "gr86.json")
         forced = subprocess.run(
-            command + ["--force", "--kinematics", "--vehicle-profile", profile_path],
+            command + [
+                "--force",
+                "--vehicle_id",
+                "Toyota GR86",
+                "--vehicle_weight",
+                "1275",
+            ],
             capture_output=True,
             text=True,
             cwd=ROOT,
@@ -615,7 +683,31 @@ def test_cli_ld_ldx_roundtrip_and_overwrite_guard():
         assert forced.returncode == 0, forced.stdout + forced.stderr
         parsed = ldData.fromfile(output)
         assert parsed.head.vehicleid == "Toyota GR86"
-        assert "Understeer Index" in [channel.name for channel in parsed.channs]
+
+
+def test_cli_vbo_end_to_end():
+    _assert_cli_roundtrip(os.path.join(EXAMPLES, "vbo_sample.vbo"), "VBO")
+
+
+def test_cli_ibt_end_to_end():
+    _assert_cli_roundtrip(os.path.join(EXAMPLES, "ibt_sample.ibt"), "IBT")
+
+
+def test_cli_xrk_end_to_end():
+    _import_or_skip("libxrk")
+    _assert_cli_roundtrip(os.path.join(EXAMPLES, "aim_sample.xrk"), "XRK")
+
+
+def test_cli_fit_end_to_end():
+    _import_or_skip("fitparse")
+    _assert_cli_roundtrip(os.path.join(EXAMPLES, "garmin_sample.fit"), "FIT")
+
+
+def test_cli_rcz_end_to_end():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "minimal.rcz")
+        _write_minimal_rcz(source)
+        _assert_cli_roundtrip(source, "RCZ")
 
 
 def test_atomic_output_verification_failure_preserves_existing_files():
@@ -681,55 +773,6 @@ def test_atomic_output_verification_failure_preserves_existing_files():
             assert "input file" in str(exc)
         else:
             raise AssertionError("--force must never replace the source input")
-
-
-def test_vehicle_profile_configures_kinematics():
-    from motec_log_generator import load_vehicle_profile
-    from processing.vehicle_profile import validate_vehicle_profile
-    from processing.math_channels import calculate_kinematics
-
-    profile_doc = {
-        "name": "test car",
-        "kinematics": {
-            "steering_ratio": 10.0,
-            "wheelbase_m": 3.0,
-            "cg_to_front_axle_m": 1.4,
-            "cg_to_rear_axle_m": 1.6,
-            "lateral_velocity_tau_s": 1.0,
-        },
-        "gear_ratio_thresholds": [120, 80, 60, 45, 35, 22],
-    }
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False,
-                                     encoding="utf-8") as tmp:
-        json.dump(profile_doc, tmp)
-        profile_path = tmp.name
-    try:
-        profile = load_vehicle_profile(profile_path)
-    finally:
-        os.remove(profile_path)
-
-    log = DataLog()
-    samples = [0.0, 1.0, 2.0]
-    for name, unit, values in (
-        ("Ground Speed", "km/h", [72.0, 72.0, 72.0]),
-        ("CG Accel Lateral", "G", [0.5, 0.5, 0.5]),
-        ("Chassis Yaw Rate", "deg/s", [10.0, 10.0, 10.0]),
-        ("Steering Angle", "deg", [100.0, 100.0, 100.0]),
-    ):
-        log.add_channel(name, unit, float, 2)
-        log.channels[name].set_samples(samples, values)
-
-    calculate_kinematics(log, parameters=profile["kinematics"])
-    assert "Understeer Index" in log.channels
-    expected = 10.0 - np.degrees(3.0 * np.radians(-10.0) / 20.0)
-    assert abs(log.channels["Understeer Index"].values[-1] - expected) < 1e-9
-
-    try:
-        validate_vehicle_profile({"kinematics": {"wheelbase_m": 3.0}})
-    except ValueError as exc:
-        assert "missing fields" in str(exc)
-    else:
-        raise AssertionError("incomplete kinematics profile must be rejected")
 
 
 def test_csv_auxiliary_export_does_not_replace_source():

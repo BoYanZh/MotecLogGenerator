@@ -66,13 +66,13 @@ def verify_motec_files(ld_path):
             if c.name == "GPS Longitude" and (np.min(data) < -180 or np.max(data) > 180):
                 errors.append(f"GPS Longitude out of physical bounds [-180, 180]: [{np.min(data)}, {np.max(data)}]")
 
-    # 3. Check Expected Advanced Math Channels
-    expected_math = ["Tire Slip Angle FL", "Understeer Index", "G Force Combined"]
+    # 3. Check Expected Derived Math Channels
+    expected_math = ["G Force Combined"]
     ch_names = [c.name for c in ld.channs]
     missing_math = [m for m in expected_math if m not in ch_names]
 
     if not missing_math:
-        print("  All expected advanced math channels present (Tire Slip Angle FL, Understeer Index, G Force Combined).")
+        print("  All expected derived math channels present (G Force Combined).")
     else:
         warnings.append(f"Missing recommended math channels: {missing_math}")
 

@@ -86,7 +86,7 @@ def main():
         parse_dump = _dump(log)
 
         # processed: apply the standard pipeline stages (math + resample)
-        log.calculate_math_channels(g_source="auto", kinematics=False)
+        log.calculate_math_channels(g_source="auto")
         log.resample("auto")
         processed_dump = _dump(log)
 

@@ -18,12 +18,11 @@ Generated log files automatically include the MoTeC Pro Analysis magic flag (`0x
   * **COBB Accessport CSVs**: Resamples ECU channels cleanly without zero-order hold gaps.
   * **AiM Solo / RaceStudio CSVs**: Auto-maps `PPS`, `SteerAngle`, `BrakePress`, `RPM`, `Gear`, temperatures, and lap beacon markers.
   * **Raw CAN Bus Logs**: Parses raw CAN `.log` files paired with a `.dbc` file.
-* **Vehicle Dynamics & Math Channels**:
+* **Derived Math Channels**:
   * **G-Force Source Selection (`--g-source {auto,sensor,calc}`)**: Choose between hardware IMU sensors or GPS Kinematic derivation ($a_{\text{lat}} = v \cdot \omega$).
-  * **0.2s Kinematic Low-Pass Filter**: Eliminates high-speed GPS derivative jitter while preserving 100% of vehicle dynamics.
+  * **0.2s Yaw-Rate Smoothing**: Reduces GPS-heading derivative jitter.
   * **Stationary Speed Guard**: Guards low-speed/stationary GPS wander ($v < 5\text{ km/h} \implies 0\text{ deg/s}$).
-  * **Advanced Math Channels**: Computes `Tire Slip Angle FL/FR/RL/RR`, `Understeer Index`, `G Force Combined`, `Chassis Yaw Rate`, and 0.5s moving average smoothed G channels.
-  * **Reusable Vehicle Profiles**: Loads validated JSON steering ratio, wheelbase, CG position, filter, metadata, and gear-ratio settings so non-GR86 vehicles do not rely on the built-in defaults.
+  * **Generic Math Channels**: Computes `G Force Combined`, `Chassis Yaw Rate`, input rates, derived gear, and 0.5s moving-average G channels.
 * **Safe Output Pipeline**:
   * Writes `.ld` and `.ldx` to temporary files, reads both back for binary/XML verification, then replaces the final files.
   * Refuses to overwrite existing outputs unless `--force` is supplied and never replaces the source input. CSV inputs use `_export.csv` for auxiliary CSV output.
@@ -34,20 +33,32 @@ Generated log files automatically include the MoTeC Pro Analysis magic flag (`0x
 
 ## Python Version & Dependencies
 
-* **Python Version**: Python 3.8 or higher (3.8 ~ 3.12+)
-* **Dependencies**: `numpy` (required), `cantools` (only required for CAN bus log type), `libxrk` (only required for AIM `.xrk`/`.xrz` log type), `fitparse` (only required for Garmin `.fit` log type)
+* **Python Version**: Python 3.10 through 3.14
+* **Core dependency**: `numpy`
+* **Optional dependencies**: `cantools` for CAN, `libxrk` for AIM
+  `.xrk`/`.xrz`, `fitparse` for Garmin `.fit`, and `scipy` for
+  standalone analysis tools
 
-Install dependencies via pip:
+Install the core CLI:
+
 ```bash
-pip install numpy
-pip install cantools  # only needed for CAN bus log processing
-pip install libxrk    # only needed for AIM XRK/XRZ log processing
-pip install fitparse  # only needed for Garmin FIT log processing
+python -m pip install .
+motec-log --help
+```
+
+Install only the format support you need:
+
+```bash
+python -m pip install ".[can]"
+python -m pip install ".[fit]"
+python -m pip install ".[xrk]"
+python -m pip install ".[analysis]"
 ```
 
 For development and the complete test suite (including all optional parsers):
+
 ```bash
-pip install -r requirements-dev.txt
+python -m pip install -e ".[dev]"
 python -m pytest -q
 ```
 
@@ -59,6 +70,8 @@ python -m pytest -q
 ```bash
 # Convert iRacing .ibt telemetry file directly (no Mu Exporter needed)
 python motec_log_generator.py "session.ibt" AUTO
+# Equivalent after installation:
+motec-log "session.ibt" AUTO
 ```
 *Reads 60Hz native binary format. Auto-extracts metadata (driver, car, track, date) from YAML session info by pressing Alt+L in iRacing to record.*
 
@@ -114,22 +127,6 @@ python motec_log_generator.py /path/to/session.fit FIT --csv --csv-wallclock
 ```
 *Writes all resampled channels as a tabular CSV with a header row of MoTeC channel names (Time, GPS Latitude/Longitude, Speed, Engine RPM, ...). Importable by AIM RaceStudio / RaceChrono RaceStudio CSV import wizards or Excel. Use `--csv-wallclock` to write Unix wall-clock timestamps instead of elapsed seconds.*
 
-### 9. Vehicle-Specific Kinematics
-
-```bash
-python motec_log_generator.py /path/to/session.csv AUTO \
-  --kinematics \
-  --vehicle-profile vehicle_profiles/gr86.json
-```
-
-The profile controls `steering_ratio`, `wheelbase_m`, front/rear CG-to-axle
-distance, lateral-velocity filter time constant, and optional gear-ratio
-thresholds. `--gear-ratio-thresholds` takes precedence when both are supplied.
-Without a profile, `--kinematics` retains the built-in GR86/BRZ parameters and
-prints a warning. The included
-[`vehicle_profiles/gr86.json`](vehicle_profiles/gr86.json) is the reference
-profile; copy it when defining another vehicle.
-
 ### Output Replacement
 
 Existing `.ld`, `.ldx`, and requested auxiliary outputs are preserved by
@@ -148,26 +145,24 @@ The current input choices are `CAN`, `CSV`, `ACCESSPORT`, `RACECHRONO`, `RCZ`,
 non-duplicated option reference:
 
 ```bash
-python motec_log_generator.py --help
+motec-log --help
 ```
 
-Key safety and dynamics options are `--output`, `--force`, `--kinematics`,
-`--vehicle-profile`, `--gear-ratio-thresholds`, `--frequency`, and
-`--mask-interp-gaps`.
+Key safety and processing options are `--output`, `--force`, `--g-source`,
+`--gear-ratio-thresholds`, `--frequency`, and `--mask-interp-gaps`.
 
 ---
 
 ## Repository Structure
 
-* **`motec_log_generator.py`**: Main CLI entry point.
-* **`data_log.py`**: Telemetry engine for parsing, resampling, filtering, and calculating advanced vehicle dynamics.
+* **`motec_log_generator.py`**: Main CLI implementation and legacy script entry point.
+* **`pyproject.toml`**: Package metadata, optional dependency groups, and the installed `motec-log` command.
+* **`data_log.py`**: Telemetry engine for parsing, resampling, filtering, and calculating generic derived channels.
 * **`motec_log.py`**: MoTeC binary `.ld` header packer and `.ldx` XML beacon generator.
 * **`core/output.py`**: Temporary write, binary/XML read-back verification, and recoverable final-file replacement.
-* **`processing/vehicle_profile.py`**: JSON vehicle profile validation.
-* **`vehicle_profiles/`**: Reusable vehicle dynamics profiles, including the GR86/BRZ example.
 * **`ldparser/`**: Low-level MoTeC `.ld` binary file parser/writer module.
 * **`can_utils/`**: CAN bus helper utilities (`list_can_ids.py`).
-* **`tools/`**: Helper scripts & analysis tools (`verify_log.py`, `convert_iracing_mu.py`, `convert_acti_log.py`, `analyze_tire_grip.py`, `analyze_lap_comparison.py`, `analyze_corner_time_loss.py`). See [`tools/README.md`](tools/README.md).
+* **`tools/`**: Helper scripts & analysis tools (`verify_log.py`, `convert_iracing_mu.py`, `convert_acti.py`, `analyze_tire_grip.py`, `analyze_lap_comparison.py`, `analyze_corner_time_loss.py`). See [`tools/README.md`](tools/README.md).
 * **`tests/`**: Unit test suite.
 * **`examples/`**: Sample telemetry logs and quickstart datasets.
 
@@ -195,7 +190,7 @@ See [`tools/README.md`](tools/README.md) for detailed documentation.
 python tests/test_examples.py
 
 # Install every parser dependency and run the complete CI-equivalent suite
-pip install -r requirements-dev.txt
+python -m pip install -e ".[dev]"
 python -m pytest -q
 ```
 

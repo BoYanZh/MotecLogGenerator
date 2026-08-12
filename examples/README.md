@@ -40,7 +40,7 @@ Files:
 
 Usage:
 ```bash
-python3 ../motec_log_generator.py aim_solo_sample.csv AIM
+python3 ../motec_log_generator.py aim_solo_sample.csv RACECHRONO
 # Or auto-detect:
 python3 ../motec_log_generator.py aim_solo_sample.csv AUTO
 ```

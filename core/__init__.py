@@ -1,1 +1,1 @@
-# Core data models, interpolation helpers, and exceptions for MotecLogGenerator.
+"""Core data models, interpolation helpers, and output safety."""
