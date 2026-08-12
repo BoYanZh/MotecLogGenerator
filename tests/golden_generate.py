@@ -7,11 +7,11 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from data_log import DataLog
+from motec_log_generator.log import DataLog
 
-EXAMPLES = os.path.join(os.path.dirname(__file__), "..", "examples")
+EXAMPLES = os.path.join(os.path.dirname(__file__), "fixtures")
 OUT_DIR = os.path.join(os.path.dirname(__file__), "golden")
 
 

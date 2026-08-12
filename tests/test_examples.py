@@ -1,4 +1,4 @@
-"""Smoke and regression tests using the example/ input files."""
+"""Smoke and regression tests using bundled telemetry fixtures."""
 
 import os
 import sys
@@ -16,10 +16,11 @@ from unittest.mock import patch
 import numpy as np
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, ROOT)
-from data_log import DataLog, Message
+sys.path.insert(0, os.path.join(ROOT, "src"))
+from motec_log_generator.log import DataLog
+from motec_log_generator.models import Message
 
-EXAMPLES = os.path.join(os.path.dirname(__file__), "..", "examples")
+EXAMPLES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 def _read_lines(filename):
@@ -46,16 +47,16 @@ def _sha256(path):
         return hashlib.sha256(source.read()).hexdigest()
 
 
-def _assert_cli_roundtrip(source, log_type):
-    from ldparser.ldparser import ldData
+def _assert_cli_roundtrip(source, log_type, expected_channels=()):
+    from motec_log_generator._vendor.ldparser import ldData
 
-    cli = os.path.join(ROOT, "motec_log_generator.py")
     with tempfile.TemporaryDirectory() as tmp_dir:
         output = os.path.join(tmp_dir, f"{log_type.lower()}_roundtrip.ld")
         result = subprocess.run(
             [
                 sys.executable,
-                cli,
+                "-m",
+                "motec_log_generator",
                 source,
                 log_type,
                 "--output",
@@ -73,6 +74,8 @@ def _assert_cli_roundtrip(source, log_type):
         parsed = ldData.fromfile(output)
         assert parsed.channs
         assert all(channel.data_len > 0 for channel in parsed.channs)
+        channel_names = {channel.name for channel in parsed.channs}
+        assert set(expected_channels) <= channel_names
         assert ET.parse(ldx_path).getroot().tag == "LDXFile"
 
 
@@ -82,6 +85,9 @@ def _write_minimal_rcz(path):
     first_timestamp = 1_700_000_000_000
     timestamps = np.arange(first_timestamp, first_timestamp + 500, 100, dtype="<i8")
     speed = np.array([10_000, 12_000, 14_000, 16_000, 18_000], dtype="<i4")
+    uptimes = np.frombuffer(timestamps.tobytes(), dtype="<i4")[::2]
+    obd_times = np.column_stack((uptimes, np.zeros_like(uptimes))).astype("<i4")
+    pitch = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype="<f8")
     lat_lon = np.array(
         [
             [222_000_000, -732_000_000],
@@ -104,6 +110,8 @@ def _write_minimal_rcz(path):
         archive.writestr("channel_1_300_0_1_1", timestamps.tobytes())
         archive.writestr("channel_1_300_0_4_0", speed.tobytes())
         archive.writestr("channel_1_300_0_3_1", lat_lon.tobytes())
+        archive.writestr("channel_12_100_8_8_1_1", obd_times.tobytes())
+        archive.writestr("channel2_12_100_8_8_3", pitch.tobytes())
 
 
 # ---------------------------------------------------------------------------
@@ -365,29 +373,6 @@ def test_mask_interp_gaps_enabled():
     assert np.isnan(vals[mid_idx])
 
 
-def test_compute_gps_heading():
-    from tools.convert_acti import compute_gps_heading
-    # Moving North: x=0, y increases -> 0 deg
-    x = np.zeros(10)
-    y = np.linspace(0, 100, 10)
-    hdg_north = compute_gps_heading(x, y)
-    assert np.allclose(hdg_north, 0.0)
-
-    # Moving East: x increases, y=0 -> 90 deg
-    x = np.linspace(0, 100, 10)
-    y = np.zeros(10)
-    hdg_east = compute_gps_heading(x, y)
-    assert np.allclose(hdg_east, 90.0)
-
-    # Moving South: x=0, y decreases -> 180 deg
-    x = np.zeros(10)
-    y = np.linspace(100, 0, 10)
-    hdg_south = compute_gps_heading(x, y)
-    assert np.allclose(hdg_south, 180.0)
-
-
-
-
 # ---------------------------------------------------------------------------
 # Empty channels guard
 # ---------------------------------------------------------------------------
@@ -403,7 +388,7 @@ def test_empty_log_guards():
 # ZOH interpolation helper
 # ---------------------------------------------------------------------------
 def test_interp_zoh_discrete():
-    from data_log import _interp_zoh
+    from motec_log_generator.interpolation import _interp_zoh
     src_t = np.array([0.0, 1.0, 2.0])
     src_v = np.array([2.0, 3.0, 1.0])
     new_t = np.array([0.0, 0.5, 1.0, 1.5, 2.0, 2.5])
@@ -545,7 +530,7 @@ def test_fit_unique_timestamps_finite_math_and_lap_boundaries():
 
 
 def test_gear_derivation_aligns_channels_by_timestamp():
-    from processing.math_channels import derive_gear_from_rpm_speed
+    from motec_log_generator.derived import derive_gear_from_rpm_speed
 
     log = DataLog()
     log.add_channel("Engine RPM", "rpm", float, 0)
@@ -573,7 +558,7 @@ def test_csv_export():
     log.resample(20)
 
     import tempfile
-    from exporters.csv_export import write_csv
+    from motec_log_generator.exporters.csv_export import write_csv
 
     with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
         tmp_path = tmp.name
@@ -590,7 +575,7 @@ def test_csv_export():
 
 
 def test_csv_export_uses_timestamp_union_and_handles_empty_channels():
-    from exporters.csv_export import write_csv
+    from motec_log_generator.exporters.csv_export import write_csv
 
     log = DataLog()
     log.add_channel("Engine RPM", "rpm", float, 0)
@@ -617,32 +602,14 @@ def test_csv_export_uses_timestamp_union_and_handles_empty_channels():
         os.remove(tmp_path)
 
 
-def test_ca9_alignment_defaults_to_no_output():
-    from tools import align_ca9_mesh
-
-    parser = align_ca9_mesh.build_arg_parser()
-    args = parser.parse_args([])
-    assert args.output is None
-    assert align_ca9_mesh.resolve_output_path(args) is None
-
-    args = parser.parse_args(["--merged", "same.ld", "--output", "same.ld"])
-    try:
-        align_ca9_mesh.resolve_output_path(args)
-    except ValueError:
-        pass
-    else:
-        raise AssertionError("in-place CA-9 replacement must require --force")
-
-
 def test_cli_ld_ldx_roundtrip_and_overwrite_guard():
-    from ldparser.ldparser import ldData
+    from motec_log_generator._vendor.ldparser import ldData
 
-    cli = os.path.join(ROOT, "motec_log_generator.py")
     source = os.path.join(EXAMPLES, "aim_solo_sample.csv")
     with tempfile.TemporaryDirectory() as tmp_dir:
         output = os.path.join(tmp_dir, "roundtrip.ld")
         command = [
-            sys.executable, cli, source, "RACECHRONO",
+            sys.executable, "-m", "motec_log_generator", source, "RACECHRONO",
             "--output", output,
         ]
 
@@ -707,12 +674,12 @@ def test_cli_rcz_end_to_end():
     with tempfile.TemporaryDirectory() as tmp_dir:
         source = os.path.join(tmp_dir, "minimal.rcz")
         _write_minimal_rcz(source)
-        _assert_cli_roundtrip(source, "RCZ")
+        _assert_cli_roundtrip(source, "RCZ", expected_channels=("Pitch Angle",))
 
 
 def test_atomic_output_verification_failure_preserves_existing_files():
-    from core.output import atomic_write_motec_pair, ensure_output_targets
-    from motec_log import MotecLog
+    from motec_log_generator.motec import MotecLog
+    from motec_log_generator.output import atomic_write_motec_pair, ensure_output_targets
 
     log = DataLog()
     log.add_channel("Ground Speed", "km/h", float, 2)
@@ -729,7 +696,7 @@ def test_atomic_output_verification_failure_preserves_existing_files():
         with open(ldx_path, "wb") as output:
             output.write(b"old ldx")
 
-        with patch("core.output.verify_motec_pair", side_effect=RuntimeError("bad staged file")):
+        with patch("motec_log_generator.output.verify_motec_pair", side_effect=RuntimeError("bad staged file")):
             try:
                 atomic_write_motec_pair(motec, log, ld_path, ldx_path)
             except RuntimeError as exc:
@@ -753,7 +720,7 @@ def test_atomic_output_verification_failure_preserves_existing_files():
                 raise PermissionError("second target locked")
             return real_replace(source, target)
 
-        with patch("core.output.os.replace", side_effect=fail_second_replace):
+        with patch("motec_log_generator.output.os.replace", side_effect=fail_second_replace):
             try:
                 atomic_write_motec_pair(motec, log, ld_path, ldx_path)
             except PermissionError as exc:
@@ -776,7 +743,7 @@ def test_atomic_output_verification_failure_preserves_existing_files():
 
 
 def test_csv_auxiliary_export_does_not_replace_source():
-    from motec_log_generator import _csv_output_path
+    from motec_log_generator.cli import _csv_output_path
 
     source = os.path.join("logs", "session.csv")
     assert _csv_output_path(os.path.join("logs", "session.ld"), source).endswith(

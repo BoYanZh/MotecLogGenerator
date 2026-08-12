@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "motec-log-generator"
-version = "1.3.0"
+version = "2.0.0"
 description = "Convert motorsports telemetry logs to MoTeC LD/LDX files."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,25 +21,28 @@ dependencies = [
 can = ["cantools>=39"]
 fit = ["fitparse>=1.2"]
 xrk = ["libxrk>=0.12"]
-analysis = ["scipy>=1.10"]
 dev = [
   "cantools>=39",
   "fitparse>=1.2",
   "libxrk>=0.12",
   "pytest>=8",
-  "scipy>=1.10",
 ]
 
 [project.scripts]
-motec-log = "motec_log_generator:main"
+motec-log = "motec_log_generator.cli:main"
 
 [project.urls]
 Repository = "https://github.com/BoYanZh/MotecLogGenerator"
 
 [tool.setuptools]
-include-package-data = false
-py-modules = ["constants", "data_log", "motec_log", "motec_log_generator"]
-packages = ["core", "exporters", "ldparser", "parsers", "processing"]
+include-package-data = true
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"motec_log_generator._vendor" = ["LDParser.LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
