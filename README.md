@@ -161,6 +161,8 @@ Tests cover all input types (CAN/CSV/ACCESSPORT/RACECHRONO/PBBUDDY/AIM), resampl
 ## License & Disclaimer
 This work was produced for research and track-day telemetry analysis purposes. It should in no way be used to circumvent MoTeC's licensing requirements for their data loggers or i2 analysis software.
 
+This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for details. The `ldparser/` submodule (GPL-3.0 reverse-engineered MoTeC `.ld` parser) and the rest of the codebase are distributed under the same license.
+
 ---
 
 ## Acknowledgments & Credits
