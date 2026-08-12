@@ -1,0 +1,7 @@
+-r requirements.txt
+
+cantools
+fitparse
+libxrk
+pytest>=8
+scipy

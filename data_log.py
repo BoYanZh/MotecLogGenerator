@@ -246,9 +246,11 @@ class DataLog(object):
         beacons.sort(key=lambda x: x[0])
         return beacons
 
-    def calculate_math_channels(self, g_source="auto", kinematics=False):
+    def calculate_math_channels(self, g_source="auto", kinematics=False,
+                                gear_ratio_thresholds=None):
         from processing.math_channels import calculate_math_channels as _calc
-        _calc(self, g_source=g_source, kinematics=kinematics)
+        _calc(self, g_source=g_source, kinematics=kinematics,
+              gear_ratio_thresholds=gear_ratio_thresholds)
     def _derive_smoothed_accel(self, window_sec=0.5):
         """ Derive 0.5s moving average smoothed G channels for clean G-G diagrams in MoTeC. """
         for raw_name, smooth_name in [(CH_CG_ACCEL_LAT, CH_CG_ACCEL_LAT_SMOOTH),

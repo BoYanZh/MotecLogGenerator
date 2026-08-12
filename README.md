@@ -41,6 +41,12 @@ pip install libxrk    # only needed for AIM XRK/XRZ log processing
 pip install fitparse  # only needed for Garmin FIT log processing
 ```
 
+For development and the complete test suite (including all optional parsers):
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
 ---
 
 ## Usage Examples
@@ -121,6 +127,7 @@ Options:
   --g-source MODE          G-force channel source: 'auto' (use IMU sensor if present, fallback to GPS calc),
                            'sensor' (only IMU sensor), or 'calc' (force derive from GPS) (default: auto)
   --frequency FREQUENCY    Fixed frequency to resample all channels at or 'auto' (default: auto)
+  --gear-ratio-thresholds  Six descending RPM/km/h thresholds for derived gears 1-6
   --gpx                    Generate GPX track file (default: false)
   --kml                    Generate KML Google Earth track file (default: false)
   --csv                    Generate CSV data file for RaceStudio / Excel import (default: false)

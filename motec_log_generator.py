@@ -62,6 +62,18 @@ def normalize_venue_name(name):
 _normalize_venue = normalize_venue_name
 
 
+def parse_gear_ratio_thresholds(value):
+    try:
+        thresholds = tuple(float(part.strip()) for part in value.split(","))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("gear ratio thresholds must be comma-separated numbers") from exc
+    if len(thresholds) != 6 or any(a <= b for a, b in zip(thresholds, thresholds[1:])):
+        raise argparse.ArgumentTypeError(
+            "gear ratio thresholds must contain six strictly descending values"
+        )
+    return thresholds
+
+
 def auto_detect_log_type(file_path):
     if file_path.lower().endswith(".ibt"):
         return "IBT"
@@ -193,12 +205,15 @@ def process_one_file(args, stint_override=None, output_override=None):
     for channel_name, channel in data_log.channels.items():
         print("\t%s" % channel)
 
-    print("Calculating advanced math channels (g-source: %s)..." % getattr(args, "g_source", "auto"))
-    data_log.calculate_math_channels(g_source=getattr(args, "g_source", "auto"),
-                                     kinematics=getattr(args, "kinematics", False))
-
     resample_freq = data_log.resample(args.frequency, mask_interp_gaps=args.mask_interp_gaps)
     print("Resampled channels at %.1f Hz..." % resample_freq)
+
+    print("Calculating advanced math channels (g-source: %s)..." % getattr(args, "g_source", "auto"))
+    data_log.calculate_math_channels(
+        g_source=getattr(args, "g_source", "auto"),
+        kinematics=getattr(args, "kinematics", False),
+        gear_ratio_thresholds=getattr(args, "gear_ratio_thresholds", None),
+    )
 
     print("Converting to MoTeC log...")
 
@@ -303,6 +318,8 @@ if __name__ == '__main__':
                         help="Source for G-force channels: 'auto' (use IMU sensor if present, fallback to GPS calc), 'sensor' (only IMU sensor), or 'calc' (force derive from GPS)")
     parser.add_argument("--kinematics", action="store_true",
                         help="Enable vehicle kinematics math channels (Tire Slip Angle, Understeer Index). Requires vehicle-specific parameters to be configured in data_log.py.")
+    parser.add_argument("--gear-ratio-thresholds", type=parse_gear_ratio_thresholds, default=None,
+                        help="Six descending RPM/km/h thresholds for derived gears 1-6 (default: 110,70,52,42,33,20)")
     parser.add_argument("--frequency", type=str, default="auto",
                         help="Fixed frequency to resample all channels at (e.g. 20, 25, 50, 100 or 'auto', default: auto)")
     parser.add_argument("--gpx", action="store_true", help="Also generate GPX track file")

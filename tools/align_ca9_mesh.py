@@ -16,12 +16,17 @@ Original result (antigravity task-2122):
 
 Usage:
     python tools/align_ca9_mesh.py [--sim stint_7_raw.ld] [--real real.ld]
-        [--t-start 1099.9] [--t-end 1550.3] [--dry-run]
+        [--t-start 1099.9] [--t-end 1550.3]
+        [--stint4 stint_4_raw.ld] [--merged merged.ld]
+        [--output aligned.ld] [--force]
+
+No file is written unless --output is supplied.
 """
 
 import argparse
 import os
 import sys
+import tempfile
 
 import numpy as np
 from scipy.interpolate import CubicSpline
@@ -33,12 +38,13 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 from ldparser.ldparser import ldData
-from processing.gps_utils import get_wgs84_geodesic_factors, enu_to_wgs84, wgs84_to_enu
+from processing.gps_utils import get_wgs84_geodesic_factors, wgs84_to_enu
 
 ACTI_DIR = os.environ.get("ACTI_TELEM_DIR", "")
 SIM_STINT7 = os.path.join(ACTI_DIR, 'highway_9_skidpad_&_ig_toyota_gr86_premium_&_stint_7.ld') if ACTI_DIR else ''
-REAL_LD = r'data/canyon/session_20260802_153319_ca-9_s.ld'
-MERGED_LD = r'data/canyon/session_ca-9_s_sim.ld'
+SIM_STINT4 = os.path.join(ACTI_DIR, 'highway_9_skidpad_&_ig_toyota_gr86_premium_&_stint_4.ld') if ACTI_DIR else ''
+REAL_LD = os.path.join(repo_root, 'data', 'canyon', 'session_20260802_153319_ca-9_s.ld')
+MERGED_LD = os.path.join(repo_root, 'data', 'canyon', 'session_ca-9_s_sim.ld')
 
 ANCHORS = np.array([0.0, 1000.0, 2000.0, 3000.0, 4200.0, 5400.0,
                     6600.0, 7800.0, 8300.0, 8800.0, 9300.0, 0.0])  # last replaced by max_d
@@ -198,15 +204,50 @@ def transform_arc_points(sim_xy, fit, n_steps=None):
     return np.column_stack([ef, nf])
 
 
-def main():
+def build_arg_parser():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--sim', default=SIM_STINT7, help='raw ACTI stint_7 .ld with Car Coord X/Y')
     ap.add_argument('--real', default=REAL_LD, help='real .ld')
+    ap.add_argument('--stint4', default=SIM_STINT4,
+                    help='raw ACTI stint_4 .ld matching the merged output frame count')
+    ap.add_argument('--merged', default=MERGED_LD,
+                    help='source merged .ld whose GPS channels will be transformed')
+    ap.add_argument('--output', default=None,
+                    help='write transformed log here; omitted means report-only mode')
+    ap.add_argument('--force', action='store_true',
+                    help='allow replacing an existing --output, including --merged itself')
     ap.add_argument('--t-start', type=float, default=1099.9, help='real window start (s)')
     ap.add_argument('--t-end', type=float, default=1550.3, help='real window end (s)')
-    ap.add_argument('--dry-run', action='store_true', help='fit + report only, do not write .ld')
+    ap.add_argument('--dry-run', action='store_true',
+                    help='fit + report only even when --output is supplied')
     ap.add_argument('--no-lock-start', action='store_true', help='disable hard start-point lock')
-    args = ap.parse_args()
+    return ap
+
+
+def resolve_output_path(args):
+    """Return an approved absolute output path, or None for report-only mode."""
+    if args.dry_run or not args.output:
+        return None
+    output_path = os.path.abspath(os.path.expanduser(args.output))
+    merged_path = os.path.abspath(os.path.expanduser(args.merged))
+    if output_path == merged_path and not args.force:
+        raise ValueError("refusing in-place replacement without --force")
+    if os.path.exists(output_path) and not args.force:
+        raise FileExistsError(f"output already exists: {output_path}; pass --force to replace it")
+    return output_path
+
+
+def main(argv=None):
+    ap = build_arg_parser()
+    args = ap.parse_args(argv)
+
+    for label, path in (("--sim", args.sim), ("--real", args.real)):
+        if not path or not os.path.isfile(path):
+            ap.error(f"{label} file does not exist: {path or '<not provided>'}")
+    try:
+        output_path = resolve_output_path(args)
+    except (ValueError, FileExistsError) as exc:
+        ap.error(str(exc))
 
     # 1. Sim side: AC coords (moving frames only)
     x_s, y_s, _ = load_sim_ac_coords(args.sim)
@@ -222,7 +263,7 @@ def main():
 
     # 3. Fit 12-mesh joint optimization
     fit = fit_12_mesh(sim_rel, real_pts, ANCHORS, lock_start=not args.no_lock_start)
-    overall_rms = report(fit)
+    report(fit)
 
     # 4. Apply to full sim polyline (moving frames) for verification of start/end
     fitted = transform_arc_points(sim_rel, fit)
@@ -232,9 +273,16 @@ def main():
     print(f"SIM start -> REAL start: {d_start:.2f}m")
     print(f"SIM end   -> REAL end:   {d_end:.2f}m")
 
-    if args.dry_run:
-        print("\n[dry-run] not writing files.")
+    if output_path is None:
+        print("\n[report-only] not writing files; pass --output to save the aligned log.")
         return
+
+    for label, path in (("--stint4", args.stint4), ("--merged", args.merged)):
+        if not path or not os.path.isfile(path):
+            ap.error(f"{label} file does not exist: {path or '<not provided>'}")
+    output_dir = os.path.dirname(output_path) or os.getcwd()
+    if not os.path.isdir(output_dir):
+        ap.error(f"output directory does not exist: {output_dir}")
 
     # 5. Write transformed GPS back into merged sim .ld
     #    The merged file is stint_4 (multi-lap).  The user's 5:37.450 lap is the
@@ -243,15 +291,13 @@ def main():
     #    cumulative arc of the window (stationary frames add 0 arc) mapped onto
     #    stint_7's arc [0, max].  Other laps (beyond the window) are left as-is
     #    (old CFG positions) to avoid extrapolation.
-    stint4_path = os.path.join(ACTI_DIR, 'highway_9_skidpad_&_ig_toyota_gr86_premium_&_stint_4.ld')
-    s4 = ldData.fromfile(stint4_path)
+    s4 = ldData.fromfile(args.stint4)
     s4ch = {c.name.strip(): c for c in s4.channs}
     ac_x = np.array(s4ch['Car Coord X'].data, dtype=float)
     ac_y = np.array(s4ch['Car Coord Y'].data, dtype=float)
-    sp4 = np.array(s4ch['Ground Speed'].data, dtype=float)
     ac_rel = np.column_stack([ac_x - ac_x[0], ac_y - ac_y[0]])
 
-    merged = ldData.fromfile(MERGED_LD)
+    merged = ldData.fromfile(args.merged)
     mch = {c.name.strip(): c for c in merged.channs}
     # force-load every channel BEFORE writing (writer reads lazily from same path)
     for c in merged.channs:
@@ -289,16 +335,20 @@ def main():
     mch['GPS Latitude'].data[:] = lat_new
     mch['GPS Longitude'].data[:] = lon_new
 
-    tmp = MERGED_LD + '.tmp'
-    merged.write(tmp)
-    v = ldData.fromfile(tmp)
-    vc = {c.name.strip(): c for c in v.channs}
-    print(f"\nverify temp file: n={len(vc['GPS Latitude'].data)}")
-    if len(vc['GPS Latitude'].data) == len(ml):
-        os.replace(tmp, MERGED_LD)
-        print(f"OK: replaced {MERGED_LD}")
-    else:
-        print("ERROR: write failed; original file untouched")
+    handle, tmp = tempfile.mkstemp(prefix='.align_ca9_', suffix='.ld.tmp', dir=output_dir)
+    os.close(handle)
+    try:
+        merged.write(tmp)
+        v = ldData.fromfile(tmp)
+        vc = {c.name.strip(): c for c in v.channs}
+        print(f"\nverify temp file: n={len(vc['GPS Latitude'].data)}")
+        if len(vc['GPS Latitude'].data) != len(ml):
+            raise RuntimeError("write verification failed; output was not replaced")
+        os.replace(tmp, output_path)
+        print(f"OK: wrote {output_path}")
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 if __name__ == '__main__':

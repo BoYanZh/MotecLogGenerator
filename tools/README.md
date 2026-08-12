@@ -107,7 +107,7 @@ python tools/analyze_lap_comparison.py --dir data/exported --fastest_only
 
 ---
 
-## 5. Corner-by-Corner Time Loss Analysis Tool (`analyze_corner_time_loss.py`)
+## 6. Corner-by-Corner Time Loss Analysis Tool (`analyze_corner_time_loss.py`)
 
 Calculates spatial distance-based time delta trace $dt(s)$ between a Target Lap and a Benchmark Reference Lap, analyzing **corner-by-corner time loss**, apex minimum speed ($V_{\min}$) differences, and primary loss diagnostics (e.g. over-braking, low apex speed, or late throttle application).
 
@@ -124,3 +124,27 @@ python tools/analyze_corner_time_loss.py --dir data/exported
 * **`Time Loss (s)`**: Net time gained or lost ($\Delta t$) within each specific corner segment.
 * **`Apex Speed (V_min)`**: Minimum cornering speed comparison in km/h ($V_{\min\text{,target}} - V_{\min\text{,ref}}$).
 * **`Primary Cause / Diagnostic`**: Diagnoses performance deficiencies per corner (`Low Apex Speed / Over-braking`, `Early Braking on Entry`, `Hesitant / Late Throttle Application`).
+
+---
+
+## 7. CA-9 Sim/Real Mesh Alignment (align_ca9_mesh.py)
+
+Fits the 12-block CA-9 S spatial alignment model. The command is report-only
+unless an explicit output is supplied, so running it cannot silently overwrite
+the source merged log.
+
+```bash
+# Fit and report only
+python tools/align_ca9_mesh.py --sim stint_7.ld --real real.ld
+
+# Write a separate aligned file
+python tools/align_ca9_mesh.py --sim stint_7.ld --real real.ld \
+  --stint4 stint_4.ld --merged merged.ld --output aligned.ld
+
+# Replacing an existing output, including merged.ld itself, requires --force
+python tools/align_ca9_mesh.py --sim stint_7.ld --real real.ld \
+  --stint4 stint_4.ld --merged merged.ld --output merged.ld --force
+```
+
+Set ACTI_TELEM_DIR to populate the default stint paths, or pass --sim and
+--stint4 explicitly.

@@ -13,7 +13,6 @@ from __future__ import annotations
 import datetime
 
 from core.models import Message
-from constants import CHANNEL_ALIASES
 
 # Garmin FIT stores angles as semicircles; 2^31 = 180 degrees
 _SEMICIRCLE = 2 ** 31
@@ -42,7 +41,6 @@ _FIT_CHANNEL_MAP = {
     "heart_rate":          ("Heart Rate",    "bpm", 0, None),
     "power":               ("Power",         "W", 0, None),
     "cadence":             ("Cadence",       "rpm", 0, None),
-    "fractional_cadence":  ("Cadence",       "rpm", 0, None),
     "distance":            ("Distance",      "m", 2, None),
     "temperature":         ("Air Temp",      "C", 1, None),
     "vertical_oscillation": ("Vertical Osc", "mm", 1, None),
@@ -84,9 +82,10 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
             data_log.metadata["event_name"] = str(sport).title()
 
     # ---- channels ----
-    ch_created = {}
-    records = []
-    t0 = None
+    # FIT files can contain more than one record message for the same timestamp.
+    # Merge their fields so every output channel has a strictly increasing time
+    # axis. Keeping duplicate timestamps would make derivative math divide by 0.
+    records_by_time = {}
     for msg in fit.get_messages("record"):
         fields = {f.name: f.value for f in msg.fields if f.value is not None}
         if not fields:
@@ -94,9 +93,13 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
         ts = fields.get("timestamp")
         if ts is None:
             continue
-        if t0 is None:
-            t0 = ts
-        records.append((ts, fields))
+        if ts in records_by_time:
+            records_by_time[ts].update(fields)
+        else:
+            records_by_time[ts] = fields
+
+    records = sorted(records_by_time.items(), key=lambda item: item[0])
+    t0 = records[0][0] if records else None
 
     for ts, fields in records:
         t_rel = (ts - t0).total_seconds()
@@ -105,15 +108,17 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
             fields.pop("speed", None)
         if "enhanced_altitude" in fields:
             fields.pop("altitude", None)
-        if "fractional_cadence" in fields:
-            fields.pop("cadence", None)
+        # fractional_cadence is the sub-RPM component, not a replacement for
+        # the integer cadence field.
+        fractional_cadence = fields.pop("fractional_cadence", None)
+        if fractional_cadence is not None and fields.get("cadence") is not None:
+            fields["cadence"] = float(fields["cadence"]) + float(fractional_cadence)
         for fit_name, (ch_name, unit, dec, conv) in _FIT_CHANNEL_MAP.items():
             val = fields.get(fit_name)
             if val is None:
                 continue
             if ch_name not in data_log.channels:
                 data_log.add_channel(ch_name, unit, float, dec)
-                ch_created[ch_name] = True
             v = conv(val) if conv else float(val)
             data_log.channels[ch_name].messages.append(Message(t_rel, v))
 
@@ -123,7 +128,6 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
 
     lap_msgs = list(fit.get_messages("lap"))
     if lap_msgs:
-        lap_start = None
         for i, m in enumerate(lap_msgs):
             st = _fit_field(m, "start_time")
             et = _fit_field(m, "timestamp")
@@ -132,18 +136,15 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
                 continue
             start_s = (st - t0).total_seconds() if t0 else 0.0
             end_s = (et - t0).total_seconds() if t0 else 0.0
-            if dur is not None:
-                end_s = start_s + float(dur)
             if end_s <= start_s:
                 continue
+            lap_duration = float(dur) if dur is not None and float(dur) > 0 else end_s - start_s
             laps_info["laps"].append({
                 "lap_num": i + 1, "start_time": start_s, "end_time": end_s,
-                "duration": end_s - start_s, "type": "Timed",
+                "duration": lap_duration, "type": "Timed",
             })
-            beacons.append((start_s, "Start/Finish"))
-            beacons.append((end_s, "Start/Finish"))
-            if laps_info["fastest_time"] == 0.0 or (end_s - start_s) < laps_info["fastest_time"]:
-                laps_info["fastest_time"] = end_s - start_s
+            if laps_info["fastest_time"] == 0.0 or lap_duration < laps_info["fastest_time"]:
+                laps_info["fastest_time"] = lap_duration
     else:
         # fallback: split at event markers where event is a lap trigger
         prev_ts = None
@@ -161,11 +162,18 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
                             "start_time": prev_ts, "end_time": t_s,
                             "duration": dur, "type": "Timed",
                         })
-                        beacons.append((prev_ts, "Start/Finish"))
-                        beacons.append((t_s, "Start/Finish"))
                         if laps_info["fastest_time"] == 0.0 or dur < laps_info["fastest_time"]:
                             laps_info["fastest_time"] = dur
                 prev_ts = t_s
+
+    # Marker timestamps must be actual record-time boundaries. Timer duration
+    # can exclude pauses and is valid for lap timing, but not as a time-axis
+    # coordinate. Deduplicate contiguous lap start/end boundaries.
+    for lap in laps_info["laps"]:
+        for boundary in (lap["start_time"], lap["end_time"]):
+            if not any(abs(boundary - existing[0]) <= 1e-6 for existing in beacons):
+                beacons.append((boundary, "Start/Finish"))
+    beacons.sort(key=lambda item: item[0])
 
     laps_info["total_laps"] = len(laps_info["laps"])
     laps_info["beacons"] = sorted(set(beacons))
@@ -181,6 +189,8 @@ def parse_fit_log(data_log, fit_file_path, target_lap=None):
                 for name in list(data_log.channels):
                     ch = data_log.channels[name]
                     ch.messages = [m for m in ch.messages if t_lo <= m.timestamp <= t_hi]
+            else:
+                print(f"WARNING: Lap '{target_lap}' not found in .fit file; keeping all laps")
         except (ValueError, IndexError):
             print(f"WARNING: Lap '{target_lap}' not found in .fit file; keeping all laps")
 

@@ -27,7 +27,11 @@ from constants import (
 )
 
 
-def calculate_math_channels(data_log, g_source="auto", kinematics=False):
+DEFAULT_GEAR_RATIO_THRESHOLDS = (110.0, 70.0, 52.0, 42.0, 33.0, 20.0)
+
+
+def calculate_math_channels(data_log, g_source="auto", kinematics=False,
+                            gear_ratio_thresholds=None):
     """
     g_source: "auto" (default), "sensor", or "calc"
       - "auto": Use raw IMU sensor G channels if present; otherwise derive from GPS.
@@ -56,11 +60,11 @@ def calculate_math_channels(data_log, g_source="auto", kinematics=False):
     derive_brake_pos(data_log)
     calculate_input_rates(data_log)
     mirror_throttle_accel(data_log)
-    derive_gear_from_rpm_speed(data_log)
+    derive_gear_from_rpm_speed(data_log, ratio_thresholds=gear_ratio_thresholds)
 
 
-def derive_gear_from_rpm_speed(data_log):
-    """ Derive integer Gear (1-6) from Engine RPM and Ground Speed ratio when Gear is not logged directly. """
+def derive_gear_from_rpm_speed(data_log, ratio_thresholds=None):
+    """Derive integer Gear (1-6) from timestamp-aligned RPM/speed ratios."""
     from constants import CH_GEAR, CH_ENGINE_RPM, CH_GROUND_SPEED
     if CH_GEAR in data_log.channels:
         return
@@ -68,39 +72,60 @@ def derive_gear_from_rpm_speed(data_log):
         return
     rpm_chan = data_log.channels[CH_ENGINE_RPM]
     spd_chan = data_log.channels[CH_GROUND_SPEED]
-    n = min(len(rpm_chan.messages), len(spd_chan.messages))
-    if n < 2:
+    if len(rpm_chan.messages) < 2 or len(spd_chan.messages) < 2:
         return
-    
-    t_arr = np.array([m.timestamp for m in rpm_chan.messages[:n]])
-    rpm_vals = np.array([m.value for m in rpm_chan.messages[:n]])
-    spd_vals = np.array([m.value for m in spd_chan.messages[:n]])  # km/h
+
+    rpm_times = np.asarray(rpm_chan.timestamps, dtype=np.float64)
+    rpm_values = np.asarray(rpm_chan.values, dtype=np.float64)
+    order = np.argsort(rpm_times, kind="stable")
+    rpm_times = rpm_times[order]
+    rpm_values = rpm_values[order]
+    keep = np.concatenate([rpm_times[1:] != rpm_times[:-1], [True]])
+    rpm_times = rpm_times[keep]
+    rpm_values = rpm_values[keep]
+    if len(rpm_times) < 2:
+        return
+
+    speed_times = np.asarray(spd_chan.timestamps, dtype=np.float64)
+    speed_values = np.asarray(spd_chan.values, dtype=np.float64)
+    order = np.argsort(speed_times, kind="stable")
+    speed_times = speed_times[order]
+    speed_values = speed_values[order]
+    keep = np.concatenate([speed_times[1:] != speed_times[:-1], [True]])
+    speed_times = speed_times[keep]
+    speed_values = speed_values[keep]
+    overlap = (speed_times >= rpm_times[0]) & (speed_times <= rpm_times[-1])
+    if np.count_nonzero(overlap) < 2:
+        return
+
+    t_arr = speed_times[overlap]
+    spd_vals = speed_values[overlap].copy()
+    rpm_vals = np.interp(t_arr, rpm_times, rpm_values)
     if spd_chan.units == "mph":
         spd_vals *= 1.60934
+    elif spd_chan.units == "m/s":
+        spd_vals *= 3.6
 
-    ratios = np.zeros(n)
+    thresholds = ratio_thresholds
+    if thresholds is None:
+        thresholds = data_log.metadata.get("gear_ratio_thresholds", DEFAULT_GEAR_RATIO_THRESHOLDS)
+    thresholds = np.asarray(thresholds, dtype=np.float64)
+    if thresholds.shape != (6,) or not np.all(np.diff(thresholds) < 0):
+        raise ValueError("gear ratio thresholds must contain six strictly descending values")
+
+    ratios = np.zeros(len(t_arr), dtype=np.float64)
     mask = (spd_vals > 5.0) & (rpm_vals > 500.0)
     ratios[mask] = rpm_vals[mask] / spd_vals[mask]
 
-    gear_vals = np.zeros(n, dtype=np.float64)
-    for i in range(n):
-        if mask[i]:
-            r = ratios[i]
-            if r > 110:
-                gear_vals[i] = 1.0
-            elif r > 70:
-                gear_vals[i] = 2.0
-            elif r > 52:
-                gear_vals[i] = 3.0
-            elif r > 42:
-                gear_vals[i] = 4.0
-            elif r > 33:
-                gear_vals[i] = 5.0
-            elif r > 20:
-                gear_vals[i] = 6.0
+    gear_vals = np.zeros(len(t_arr), dtype=np.float64)
+    unassigned = mask.copy()
+    for gear, threshold in enumerate(thresholds, start=1):
+        selected = unassigned & (ratios > threshold)
+        gear_vals[selected] = float(gear)
+        unassigned[selected] = False
 
     data_log.add_channel(CH_GEAR, "", float, 0)
-    data_log.channels[CH_GEAR].messages = [Message(t_arr[i], gear_vals[i]) for i in range(n)]
+    data_log.channels[CH_GEAR].set_samples(t_arr, gear_vals)
 
 
 def derive_smoothed_accel(data_log, window_sec=0.5):

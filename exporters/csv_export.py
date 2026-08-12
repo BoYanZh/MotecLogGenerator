@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import csv
 
+import numpy as np
+
 from constants import CH_GPS_LATITUDE, CH_GPS_LONGITUDE
 
 
@@ -23,11 +25,11 @@ def _ordered_channels(data_log):
         data_log.channels,
         key=lambda n: -data_log.channels[n].avg_frequency(),
     )
-    for prio in (CH_GPS_LATITUDE, CH_GPS_LONGITUDE):
-        if prio in names:
-            names.remove(prio)
-            names.insert(0, prio)
-    return names
+    priority = [
+        name for name in (CH_GPS_LATITUDE, CH_GPS_LONGITUDE)
+        if name in names
+    ]
+    return priority + [name for name in names if name not in priority]
 
 
 def write_csv(data_log, csv_filename, wallclock=False):
@@ -41,12 +43,13 @@ def write_csv(data_log, csv_filename, wallclock=False):
     names = _ordered_channels(data_log)
     channels = {n: data_log.channels[n] for n in names}
 
-    # align all channels on the union of timestamps via simple merge:
-    # iterate the highest-frequency channel and forward-fill the rest.
-    master = channels[names[0]]
-    n = len(master.messages)
-    if n == 0:
+    nonempty_times = [
+        channel.timestamps for channel in channels.values()
+        if len(channel.timestamps) > 0
+    ]
+    if not nonempty_times:
         return False
+    timeline = np.unique(np.concatenate(nonempty_times))
 
     t0_wall = 0.0
     if wallclock and getattr(data_log, "datetime", None) is not None:
@@ -58,19 +61,21 @@ def write_csv(data_log, csv_filename, wallclock=False):
         writer.writerow([time_col] + names)
 
         idx = {name: 0 for name in names}
-        for i in range(n):
-            t = master.messages[i].timestamp
+        for t in timeline:
             t_out = t + t0_wall if wallclock else t
             row = [f"{t_out:.3f}"]
             for name in names:
                 ch = channels[name]
-                msgs = ch.messages
+                timestamps = ch.timestamps
                 j = idx[name]
+                if len(timestamps) == 0 or t < timestamps[0]:
+                    row.append("")
+                    continue
                 # forward-fill: advance while next message time <= current
-                while j + 1 < len(msgs) and msgs[j + 1].timestamp <= t:
+                while j + 1 < len(timestamps) and timestamps[j + 1] <= t:
                     j += 1
                 idx[name] = j
-                row.append(f"{msgs[j].value:.6g}")
+                row.append(f"{ch.values[j]:.6g}")
             writer.writerow(row)
 
     return True

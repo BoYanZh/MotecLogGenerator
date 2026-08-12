@@ -2,6 +2,10 @@
 
 import os
 import sys
+import csv
+import importlib
+import tempfile
+from unittest import SkipTest
 
 import numpy as np
 
@@ -20,6 +24,14 @@ def _read_lines(filename):
 def _dedup_channels(log):
     """MoTeC doesn't allow duplicate channel names, validate this invariant."""
     assert len(log.channels) == len(set(log.channels)), f"Duplicate channel names: {list(log.channels)}"
+
+
+def _import_or_skip(module_name):
+    """Import an optional test dependency without turning a skip into a pass."""
+    try:
+        return importlib.import_module(module_name)
+    except ImportError as exc:
+        raise SkipTest(f"{module_name} not installed") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -206,14 +218,7 @@ def test_racechrono_resample_and_math():
 # CAN
 # ---------------------------------------------------------------------------
 def test_can_smoke():
-    pytest = pytest_if_available()
-    if pytest is None:
-        return
-
-    try:
-        import cantools
-    except ImportError:
-        pytest.skip("cantools not installed")
+    cantools = _import_or_skip("cantools")
 
     log = DataLog()
     dbc_path = os.path.join(EXAMPLES, "sample_can_spec.dbc")
@@ -225,13 +230,7 @@ def test_can_smoke():
 
 
 def test_can_resample():
-    pytest = pytest_if_available()
-    if pytest is None:
-        return
-    try:
-        import cantools
-    except ImportError:
-        pytest.skip("cantools not installed")
+    cantools = _import_or_skip("cantools")
 
     log = DataLog()
     dbc_path = os.path.join(EXAMPLES, "sample_can_spec.dbc")
@@ -386,15 +385,6 @@ def test_sector_beacons_detection():
     assert beacons[0][1] in ("Start/Finish", "Split 1")
 
 
-def pytest_if_available():
-    """Return the pytest module if available, None otherwise (for standalone runs)."""
-    try:
-        import pytest
-        return pytest
-    except ImportError:
-        return None
-
-
 # ---------------------------------------------------------------------------
 # Regression: from_csv_log must not delete channels right of a non-numeric column
 # (previously the channel_dict index remapping broke column lookup)
@@ -420,14 +410,7 @@ def test_csv_middle_non_numeric_column_keeps_right_columns():
 # AIM XRK / XRZ
 # ---------------------------------------------------------------------------
 def test_xrk_smoke():
-    pytest = pytest_if_available()
-    if pytest is None:
-        return
-
-    try:
-        import libxrk  # noqa: F401
-    except ImportError:
-        pytest.skip("libxrk not installed")
+    _import_or_skip("libxrk")
 
     log = DataLog()
     log.from_xrk_log(os.path.join(EXAMPLES, "aim_sample.xrk"))
@@ -438,18 +421,27 @@ def test_xrk_smoke():
     _dedup_channels(log)
 
 
+def test_xrk_units_time_origin_and_datetime():
+    _import_or_skip("libxrk")
+
+    log = DataLog()
+    log.from_xrk_log(os.path.join(EXAMPLES, "aim_sample.xrk"))
+
+    speed = log.channels["Ground Speed"]
+    rpm = log.channels["Engine RPM"]
+    gps = log.channels["GPS Latitude"]
+    assert speed.units == "km/h"
+    assert max(speed.values) > 100.0, "XRK m/s speed was labelled km/h without conversion"
+    assert rpm.start() == 0.0
+    assert 4.7 < gps.start() < 4.8, "Per-channel time origins must not be collapsed to zero"
+    assert log.datetime.strftime("%Y-%m-%d %H:%M:%S") == "2016-01-23 12:09:04"
+
+
 # ---------------------------------------------------------------------------
 # Garmin FIT
 # ---------------------------------------------------------------------------
 def test_fit_smoke():
-    pytest = pytest_if_available()
-    if pytest is None:
-        return
-
-    try:
-        import fitparse  # noqa: F401
-    except ImportError:
-        pytest.skip("fitparse not installed")
+    _import_or_skip("fitparse")
 
     log = DataLog()
     log.from_fit_log(os.path.join(EXAMPLES, "garmin_sample.fit"))
@@ -458,6 +450,44 @@ def test_fit_smoke():
     assert "GPS Longitude" in log.channels
     assert log.duration() > 0
     _dedup_channels(log)
+
+
+def test_fit_unique_timestamps_finite_math_and_lap_boundaries():
+    _import_or_skip("fitparse")
+
+    log = DataLog()
+    log.from_fit_log(os.path.join(EXAMPLES, "garmin_sample.fit"))
+    speed = log.channels["Ground Speed"]
+    assert np.all(np.diff(speed.timestamps) > 0), "FIT timestamps must be strictly increasing"
+
+    log.calculate_math_channels()
+    for name in ("CG Accel Longitudinal", "CG Accel Long Smooth"):
+        assert np.all(np.isfinite(log.channels[name].values)), f"{name} contains NaN/Inf"
+
+    laps = log.laps_info["laps"]
+    assert len(log.laps_info["beacons"]) == len(laps) + 1
+    for previous, current in zip(laps, laps[1:]):
+        assert previous["end_time"] == current["start_time"]
+
+
+def test_gear_derivation_aligns_channels_by_timestamp():
+    from processing.math_channels import derive_gear_from_rpm_speed
+
+    log = DataLog()
+    log.add_channel("Engine RPM", "rpm", float, 0)
+    log.channels["Engine RPM"].messages = [
+        Message(i / 10.0, 3000.0) for i in range(21)
+    ]
+    log.add_channel("Ground Speed", "km/h", float, 2)
+    log.channels["Ground Speed"].messages = [
+        Message(0.0, 30.0), Message(1.0, 30.0),
+        Message(1.0, 30.0), Message(2.0, 30.0)
+    ]
+
+    derive_gear_from_rpm_speed(log)
+    gear = log.channels["Gear"]
+    assert np.array_equal(gear.timestamps, np.array([0.0, 1.0, 2.0]))
+    assert np.array_equal(gear.values, np.array([2.0, 2.0, 2.0]))
 
 
 # ---------------------------------------------------------------------------
@@ -485,6 +515,51 @@ def test_csv_export():
         os.remove(tmp_path)
 
 
+def test_csv_export_uses_timestamp_union_and_handles_empty_channels():
+    from exporters.csv_export import write_csv
+
+    log = DataLog()
+    log.add_channel("Engine RPM", "rpm", float, 0)
+    log.channels["Engine RPM"].messages = [
+        Message(i / 100.0, 1000.0 + i) for i in range(101)
+    ]
+    for name, base in (("GPS Latitude", 37.0), ("GPS Longitude", -122.0)):
+        log.add_channel(name, "deg", float, 7)
+        log.channels[name].messages = [
+            Message(i / 10.0, base + i * 1e-5) for i in range(11)
+        ]
+    log.add_channel("Empty", "", float, 0)
+
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        assert write_csv(log, tmp_path)
+        with open(tmp_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        assert len(rows) - 1 == 101
+        assert rows[0][:3] == ["Time (s)", "GPS Latitude", "GPS Longitude"]
+        assert all(row[-1] == "" for row in rows[1:])
+    finally:
+        os.remove(tmp_path)
+
+
+def test_ca9_alignment_defaults_to_no_output():
+    from tools import align_ca9_mesh
+
+    parser = align_ca9_mesh.build_arg_parser()
+    args = parser.parse_args([])
+    assert args.output is None
+    assert align_ca9_mesh.resolve_output_path(args) is None
+
+    args = parser.parse_args(["--merged", "same.ld", "--output", "same.ld"])
+    try:
+        align_ca9_mesh.resolve_output_path(args)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("in-place CA-9 replacement must require --force")
+
+
 
 if __name__ == "__main__":
     # Run all test_* functions directly without pytest
@@ -493,6 +568,7 @@ if __name__ == "__main__":
     tests = sorted(name for name in g if name.startswith("test_"))
     passed = 0
     failed = 0
+    skipped = 0
     for name in tests:
         fn = g[name]
         if not callable(fn) or name.startswith("pytest"):
@@ -501,10 +577,13 @@ if __name__ == "__main__":
             fn()
             print(f"  PASS {name}")
             passed += 1
+        except SkipTest as e:
+            print(f"  SKIP {name}: {e}")
+            skipped += 1
         except Exception as e:
             print(f"  FAIL {name}: {e}")
             traceback.print_exc()
             failed += 1
-    print(f"\n{passed} passed, {failed} failed")
+    print(f"\n{passed} passed, {skipped} skipped, {failed} failed")
     if failed:
         sys.exit(1)
