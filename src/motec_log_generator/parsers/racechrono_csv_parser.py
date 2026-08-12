@@ -129,6 +129,12 @@ def parse_racechrono_log(data_log, log_lines, target_lap=None):
         "gps latitude": {"name": CH_GPS_LATITUDE, "units": "deg"},
         "gps longitude": {"name": CH_GPS_LONGITUDE, "units": "deg"},
         "corr dist": {"name": CH_CORR_DIST, "units": "m"},
+        # RaceChrono dynamic-column exports. These source-qualified names exceed
+        # MoTeC LD's 32-byte channel-name field, so map the measured CAN values
+        # to their standard names before writing.
+        "longitudinal acceleration (g) *canbus": {"name": CH_CG_ACCEL_LON, "units": "G"},
+        "combined acceleration (g) *canbus": {"name": CH_G_COMBINED, "units": "G"},
+        "engine oil temperature (.c) *canbus": {"name": CH_ENGINE_OIL_TEMP, "units": "C"},
     }
 
     # Fallback for yaw rate if not named "yaw_rate" or "gps gyro"
@@ -139,17 +145,24 @@ def parse_racechrono_log(data_log, log_lines, target_lap=None):
             rc_to_motec_map["y_rate_of_rotation"] = {"name": CH_YAW_RATE, "units": "deg/s"}
 
     # Explicitly ignore uncalibrated raw IMU channels
-    ignored_columns = {"x_acc", "y_acc", "z_acc"}
+    ignored_columns = {
+        "x acc",
+        "y acc",
+        "z acc",
+        # Prefer the measured CAN value below over RaceChrono's calculated
+        # longitudinal acceleration. Their LD-truncated names collide.
+        "longitudinal acceleration (g) *calc",
+    }
 
     active_columns = []
     lap_number_idx = -1
     col_unit_map = {}
 
     for i, raw_name in enumerate(channel_names):
-        if not raw_name or raw_name in ignored_columns:
+        raw_lower = raw_name.lower().strip().replace("_", " ").replace("-", " ")
+        if not raw_name or raw_lower in ignored_columns:
             continue
 
-        raw_lower = raw_name.lower().strip().replace("_", " ").replace("-", " ")
         if raw_lower == "lap_number" or raw_lower == "lap":
             lap_number_idx = i + 1
 

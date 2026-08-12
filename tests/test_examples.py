@@ -677,6 +677,39 @@ def test_cli_rcz_end_to_end():
         _assert_cli_roundtrip(source, "RCZ", expected_channels=("Pitch Angle",))
 
 
+def test_racechrono_long_names_prefer_canbus_and_roundtrip():
+    from motec_log_generator._vendor.ldparser import ldData
+    from motec_log_generator.motec import MotecLog
+    from motec_log_generator.output import atomic_write_motec_pair
+
+    lines = [
+        "Time (s),Longitudinal acceleration (G) *calc,"
+        "Longitudinal acceleration (G) *canbus,Combined acceleration (G) *canbus,"
+        "Engine oil temperature (.C) *canbus\n",
+        "s,G,G,G,C\n",
+        "0.0,0.10,0.20,0.30,100.0\n",
+        "1.0,0.11,0.21,0.31,101.0\n",
+    ]
+    log = DataLog()
+    log.from_racechrono_log(lines)
+
+    assert "Longitudinal acceleration (G) *calc" not in log.channels
+    assert np.array_equal(log.channels["CG Accel Longitudinal"].values, [0.20, 0.21])
+    assert np.array_equal(log.channels["G Force Combined"].values, [0.30, 0.31])
+    assert np.array_equal(log.channels["Engine Oil Temp"].values, [100.0, 101.0])
+    assert all(len(name.encode("ascii")) <= 32 for name in log.channels)
+
+    motec = MotecLog()
+    motec.initialize()
+    motec.add_all_channels(log)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        ld_path = os.path.join(tmp_dir, "long_names.ld")
+        ldx_path = os.path.join(tmp_dir, "long_names.ldx")
+        atomic_write_motec_pair(motec, log, ld_path, ldx_path)
+        parsed = ldData.fromfile(ld_path)
+        assert [channel.name for channel in parsed.channs] == list(log.channels)
+
+
 def test_atomic_output_verification_failure_preserves_existing_files():
     from motec_log_generator.motec import MotecLog
     from motec_log_generator.output import atomic_write_motec_pair, ensure_output_targets
