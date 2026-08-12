@@ -280,6 +280,11 @@ def process_one_file(args, stint_override=None, output_override=None):
         if motec_log.write_kml(kml_filename, data_log):
             print("Saved .kml Google Earth file: %s" % kml_filename)
 
+    if args.csv:
+        csv_filename = os.path.splitext(ld_filename)[0] + ".csv"
+        if motec_log.write_csv(csv_filename, data_log, wallclock=getattr(args, "csv_wallclock", False)):
+            print("Saved .csv data file: %s" % csv_filename)
+
     print("Done!")
 
 
@@ -302,6 +307,9 @@ if __name__ == '__main__':
                         help="Fixed frequency to resample all channels at (e.g. 20, 25, 50, 100 or 'auto', default: auto)")
     parser.add_argument("--gpx", action="store_true", help="Also generate GPX track file")
     parser.add_argument("--kml", action="store_true", help="Also generate KML Google Earth track file")
+    parser.add_argument("--csv", action="store_true", help="Also generate CSV data file (RaceStudio / Excel import)")
+    parser.add_argument("--csv-wallclock", action="store_true", default=False, dest="csv_wallclock",
+                        help="Write wall-clock timestamps in CSV instead of elapsed seconds")
     parser.add_argument("--dbc", type=str, help="Path to DBC file, required if log type CAN")
 
     parser.add_argument("--lap", type=str, default="all",

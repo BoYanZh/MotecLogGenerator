@@ -460,6 +460,31 @@ def test_fit_smoke():
     _dedup_channels(log)
 
 
+# ---------------------------------------------------------------------------
+# CSV export
+# ---------------------------------------------------------------------------
+def test_csv_export():
+    log = DataLog()
+    log.from_csv_log(_read_lines("csv_sample.csv"))
+    log.resample(20)
+
+    import tempfile
+    from exporters.csv_export import write_csv
+
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        assert write_csv(log, tmp_path)
+        with open(tmp_path, encoding="utf-8") as f:
+            lines = f.readlines()
+        assert len(lines) >= 2, "CSV should have header + data rows"
+        header = lines[0].strip().split(",")
+        assert "Time (s)" in header
+        assert len(header) >= 2, "CSV should have at least one channel column"
+    finally:
+        os.remove(tmp_path)
+
+
 
 if __name__ == "__main__":
     # Run all test_* functions directly without pytest

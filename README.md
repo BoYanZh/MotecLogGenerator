@@ -95,6 +95,15 @@ python motec_log_generator.py /path/to/can_data.log CAN --dbc /path/to/car.dbc
 python motec_log_generator.py /path/to/accessport.csv ACCESSPORT
 ```
 
+### 8. CSV Data Export (RaceStudio / Excel)
+```bash
+# Export any parsed log as a CSV data table alongside the .ld/.ldx files
+python motec_log_generator.py /path/to/session.rcz RCZ --csv
+python motec_log_generator.py /path/to/session.xrk XRK --csv
+python motec_log_generator.py /path/to/session.fit FIT --csv --csv-wallclock
+```
+*Writes all resampled channels as a tabular CSV with a header row of MoTeC channel names (Time, GPS Latitude/Longitude, Speed, Engine RPM, ...). Importable by AIM RaceStudio / RaceChrono RaceStudio CSV import wizards or Excel. Use `--csv-wallclock` to write Unix wall-clock timestamps instead of elapsed seconds.*
+
 ---
 
 ## Command Line Options
@@ -114,6 +123,8 @@ Options:
   --frequency FREQUENCY    Fixed frequency to resample all channels at or 'auto' (default: auto)
   --gpx                    Generate GPX track file (default: false)
   --kml                    Generate KML Google Earth track file (default: false)
+  --csv                    Generate CSV data file for RaceStudio / Excel import (default: false)
+  --csv-wallclock          Write Unix wall-clock timestamps in CSV instead of elapsed seconds (default: false)
   --min_lap_sec MIN_LAP    Minimum valid lap duration in seconds to filter noise (default: 15.0s)
   --mask-interp-gaps       Mask sample interpolation gaps (>1s) with NaN instead of interpolating through them (default: false)
   --lap LAP                Specific lap number to export (e.g. 1, 15) or 'all' (default: all)

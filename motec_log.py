@@ -140,3 +140,6 @@ class MotecLog(object):
     def write_kml(self, kml_filename, data_log):
         from exporters.gpx_export import write_kml
         return write_kml(self, kml_filename, data_log)
+    def write_csv(self, csv_filename, data_log, wallclock=False):
+        from exporters.csv_export import write_csv
+        return write_csv(data_log, csv_filename, wallclock=wallclock)
