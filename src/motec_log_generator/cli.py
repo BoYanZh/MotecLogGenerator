@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import sys
 import zipfile
@@ -362,11 +363,12 @@ def build_parser():
     parser.add_argument("--dbc", type=str, help="Path to DBC file, required if log type CAN")
 
     parser.add_argument("--lap", type=str, default="all",
-                        help="Specific lap number to export (e.g. 1, 15) or 'all' to export all laps. Default is 'all'")
+                        help="Reconstructed lap number within the selected stint, or 'all' (default: all)")
     parser.add_argument("--stint", type=str, default="all",
                         help="RCZ sessionResume stint to export")
-    parser.add_argument("--min_lap_sec", type=float, default=15.0,
-                        help="Minimum valid lap duration in seconds to filter noise (default: 15.0)")
+    parser.add_argument("--min-lap-sec", "--min_lap_sec", type=float, default=15.0,
+                        dest="min_lap_sec",
+                        help="Minimum reconstructed out/timed/in segment duration in seconds (default: 15.0)")
     parser.add_argument("--mask-interp-gaps", "--mask_interp_gaps", action="store_true", default=False, dest="mask_interp_gaps",
                         help="Mask sample interpolation gaps (>1s) with NaN instead of interpolating through them (default: False)")
     parser.add_argument("--driver", type=str, default="", help="Motec log metadata field")
@@ -394,6 +396,10 @@ def main(argv=None):
         except ValueError:
             print("ERROR: Invalid --frequency value '%s'. Must be a number or 'auto'" % args.frequency)
             sys.exit(1)
+
+    if not math.isfinite(args.min_lap_sec) or args.min_lap_sec <= 0:
+        print("ERROR: --min-lap-sec must be a positive finite number")
+        sys.exit(1)
 
     if args.log:
         args.log = os.path.expanduser(args.log)

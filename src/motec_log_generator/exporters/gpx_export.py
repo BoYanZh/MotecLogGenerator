@@ -5,6 +5,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 
 from ..channels import CH_GPS_ALTITUDE, CH_GPS_LATITUDE, CH_GPS_LONGITUDE, CH_GROUND_SPEED
+from .xml_utils import indent_xml
 
 def _find_gps_channels(data_log):
     lat = data_log.channels.get(CH_GPS_LATITUDE) or data_log.channels.get("Real GPS Latitude")
@@ -59,7 +60,7 @@ def write_gpx(motec_log, gpx_filename, data_log):
             spd_ms = spd / 3.6
             ET.SubElement(pt, "speed").text = f"{spd_ms:.2f}"
 
-    ET.indent(root, space="  ")
+    indent_xml(root, space="  ")
     xml_str = ET.tostring(root, encoding="unicode")
     with open(gpx_filename, "w", encoding="utf-8") as f:
         f.write(xml_str)
@@ -88,7 +89,7 @@ def write_kml(motec_log, kml_filename, data_log):
     ET.SubElement(ls, "tessellate").text = "1"
     ET.SubElement(ls, "coordinates").text = "\n".join(coords_str_list)
 
-    ET.indent(root, space="  ")
+    indent_xml(root, space="  ")
     xml_str = ET.tostring(root, encoding="unicode")
     with open(kml_filename, "w", encoding="utf-8") as f:
         f.write(xml_str)

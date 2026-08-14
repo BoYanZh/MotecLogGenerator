@@ -5,9 +5,6 @@ AFTER refactoring to confirm behavior is unchanged.
 """
 import json
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from motec_log_generator.log import DataLog
 

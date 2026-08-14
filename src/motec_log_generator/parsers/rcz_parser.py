@@ -15,6 +15,10 @@ from ..channels import (
 )
 from ..derived import derive_yaw_rate_from_gps_heading
 
+
+_PARTIAL_OUT_LAP_SPEED_KMH = 5.0
+
+
 def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, min_lap_sec=15.0, mask_interp_gaps=False):
     """ Creates channels populated with messages directly from a RaceChrono .rcz archive.
 
@@ -27,6 +31,10 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
 
     data_log.clear()
     data_log.laps_info = {}
+
+    min_lap_sec = float(min_lap_sec)
+    if not np.isfinite(min_lap_sec) or min_lap_sec <= 0:
+        raise ValueError("min_lap_sec must be a positive finite number")
 
     if not os.path.isfile(rcz_file_path):
         print("ERROR: RCZ file %s does not exist" % rcz_file_path)
@@ -144,6 +152,21 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
         times_sec = times_sec - time_origin
         n_samples = len(times_sec)
 
+        # Resolve the GPS channels before reconstructing laps so a recording
+        # that starts at speed can be identified as a partial out lap.
+        gps_prefix = None
+        for candidate_prefix in _GPS_DEV_PFX:
+            if any(name.startswith(candidate_prefix) for name in namelist):
+                gps_prefix = candidate_prefix
+                break
+        gps_speed_values = None
+        if gps_prefix:
+            speed_key = gps_prefix + "4_0"
+            if speed_key in namelist:
+                raw_speed = np.frombuffer(read_channel(speed_key), dtype="<i4")
+                if len(raw_speed) >= n_samples:
+                    gps_speed_values = (raw_speed[:n_samples] / 1000.0) * 3.6
+
         # Map laps from session.json
         laps_raw = session_json.get("laps", [])
 
@@ -175,12 +198,25 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
 
         reconstructed_laps = []
 
-        # 1. Out Lap (if leading non-timed padding > 15.0s)
+        # 1. Out Lap (if leading non-timed padding exceeds the configured minimum)
         first_timed_s = (overlapping_laps[0].get("startTimestamp") - stint_start_ms) / 1000.0 if overlapping_laps else 0.0
-        if first_timed_s > 15.0:
+        if first_timed_s > min_lap_sec:
+            out_lap_type = "Out Lap"
+            if (
+                gps_speed_values is not None
+                and len(gps_speed_values) > 0
+                and np.isfinite(gps_speed_values[0])
+                and gps_speed_values[0] >= _PARTIAL_OUT_LAP_SPEED_KMH
+            ):
+                out_lap_type = "Partial Out Lap"
+                print(
+                    "WARNING: RCZ recording begins mid-lap at "
+                    f"{gps_speed_values[0]:.1f} km/h; marking the leading segment "
+                    "as Partial Out Lap"
+                )
             reconstructed_laps.append({
-                "type": "Out Lap",
-                "lap_label": "Out Lap",
+                "type": out_lap_type,
+                "lap_label": out_lap_type,
                 "lap_num": 1,
                 "start_time": 0.0,
                 "end_time": first_timed_s,
@@ -199,7 +235,7 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
             if f_ms is not None:
                 end_s = min(stint_duration_s, (f_ms - stint_start_ms) / 1000.0)
                 dur_s = end_s - start_s
-                if dur_s >= 15.0:  # Must be at least 15s to be a valid lap
+                if dur_s >= min_lap_sec:
                     reconstructed_laps.append({
                         "type": "Timed",
                         "lap_label": str(len(reconstructed_laps) + 1),
@@ -213,7 +249,7 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
             else:
                 end_s = stint_duration_s
                 dur_s = end_s - start_s
-                if dur_s >= 15.0:
+                if dur_s >= min_lap_sec:
                     reconstructed_laps.append({
                         "type": "In Lap",
                         "lap_label": "In Lap",
@@ -225,11 +261,11 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
                         "orig_num": orig_num
                     })
 
-        # 3. Trailing In Lap check (if trailing non-timed padding > 15.0s)
+        # 3. Trailing In Lap check
         if overlapping_laps and overlapping_laps[-1].get("finishTimestamp") is not None:
             last_finish_ms = overlapping_laps[-1].get("finishTimestamp")
             in_dur_s = (stint_end_ms - last_finish_ms) / 1000.0
-            if in_dur_s > 15.0:
+            if in_dur_s > min_lap_sec:
                 reconstructed_laps.append({
                     "type": "In Lap",
                     "lap_label": "In Lap",
@@ -254,31 +290,54 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
             except ValueError:
                 pass
 
+        selected_laps = reconstructed_laps
+        selected_time_origin = 0.0
         if target_lap_int is not None:
-            mask = (lap_numbers == target_lap_int)
+            matching_laps = [
+                lap for lap in reconstructed_laps if lap["lap_num"] == target_lap_int
+            ]
+            if matching_laps:
+                mask = (lap_numbers == target_lap_int)
+                selected_samples = times_sec[mask]
+                if len(selected_samples) > 0:
+                    selected_time_origin = float(selected_samples[0])
+                selected_lap = dict(matching_laps[0])
+                selected_lap["start_time"] = 0.0
+                selected_lap["end_time"] = float(selected_lap["duration"])
+                selected_laps = [selected_lap]
+            else:
+                print(f"WARNING: Lap '{target_lap}' not found in RCZ stint; keeping all laps")
+                target_lap_int = None
+                mask = np.ones(n_samples, dtype=bool)
         else:
             mask = np.ones(n_samples, dtype=bool)
 
-        sample_times = times_sec[mask]
-        if len(sample_times) > 0 and len(timestamps_ms) > 0 and timestamps_ms[0] > 1e8:
-            actual_start_ms = timestamps_ms[0] + (sample_times[0] * 1000.0)
+        export_times_sec = times_sec - selected_time_origin
+        sample_times = export_times_sec[mask]
+        original_sample_times = times_sec[mask]
+        if len(original_sample_times) > 0 and len(timestamps_ms) > 0 and timestamps_ms[0] > 1e8:
+            actual_start_ms = timestamps_ms[0] + (original_sample_times[0] * 1000.0)
             import datetime
             data_log.datetime = datetime.datetime.fromtimestamp(actual_start_ms / 1000.0)
 
         # Store laps_info for ldx export
         fastest_lap_num = 1
         fastest_dur = float("inf")
-        for r in reconstructed_laps:
+        for r in selected_laps:
             if r["type"] == "Timed" and r["duration"] < fastest_dur:
                 fastest_dur = r["duration"]
                 fastest_lap_num = r["lap_num"]
 
         data_log.laps_info = {
-            "laps": reconstructed_laps,
-            "total_laps": len(reconstructed_laps),
+            "laps": selected_laps,
+            "total_laps": len(selected_laps),
             "fastest_lap": fastest_lap_num,
             "fastest_time": fastest_dur if fastest_dur != float("inf") else 0.0,
-            "session_duration": stint_duration_s,
+            "session_duration": (
+                float(selected_laps[0]["duration"])
+                if target_lap_int is not None and selected_laps
+                else stint_duration_s
+            ),
         }
 
         # Helper to add channel messages
@@ -294,22 +353,12 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
         # Lap Number Channel
         populate_channel(CH_LAP_NUMBER, "", lap_numbers, 0)
         # Running Time Channel
-        populate_channel(CH_RUNNING_TIME, "s", times_sec, 2)
-
-        # Auto-detect GPS device prefix (type 200 = external VBOX, type 100 = phone GPS)
-        gps_prefix = None
-        for _pfx in _GPS_DEV_PFX:
-            if any(n.startswith(_pfx) for n in namelist):
-                gps_prefix = _pfx
-                break
+        populate_channel(CH_RUNNING_TIME, "s", export_times_sec, 2)
 
         if gps_prefix:
             # 2. Parse Speed
-            _spd_key = gps_prefix + "4_0"
-            if _spd_key in namelist:
-                raw_spd = np.frombuffer(read_channel(_spd_key), dtype="<i4")
-                if len(raw_spd) >= n_samples:
-                    populate_channel(CH_GROUND_SPEED, "km/h", (raw_spd / 1000.0) * 3.6, 2)
+            if gps_speed_values is not None:
+                populate_channel(CH_GROUND_SPEED, "km/h", gps_speed_values, 2)
 
             # 3. Parse Latitude & Longitude
             _ll_key = gps_prefix + "3_1"

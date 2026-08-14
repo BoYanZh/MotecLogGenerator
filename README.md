@@ -22,7 +22,9 @@ never used as an output target.
 
 ## Install
 
-Python 3.10 through 3.14 is supported.
+Python 3.8 through 3.14 is supported. AIM XRK/XRZ import requires Python 3.10
+or newer because `libxrk` does not publish Python 3.8/3.9 builds; all other
+input formats remain available on Python 3.8/3.9.
 
 ```bash
 python -m pip install .
@@ -83,6 +85,12 @@ Run `motec-log --help` for the authoritative option list.
 
 - RCZ sessions with multiple stints are split automatically when `--stint all`
   is used.
+- RCZ `--lap N` selects the reconstructed lap number within a stint and rebases
+  that single-lap export to zero elapsed time.
+- `--min-lap-sec` controls the minimum reconstructed RCZ out/timed/in segment
+  duration; the legacy `--min_lap_sec` spelling remains accepted.
+- An RCZ leading segment that starts at 5 km/h or faster is retained as a
+  `Partial Out Lap`, with a warning that the source recording began mid-lap.
 - `.ld` and `.ldx` are staged, parsed back, and committed as a pair.
 - `--force` is required to replace existing generated files.
 - `--g-source {auto,sensor,calc}` selects hardware or GPS-derived G channels.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .xml_utils import indent_xml
+
 
 def _clean_ascii(text):
     if not text:
@@ -145,8 +147,7 @@ def write_ldx(motec_log, filename, laps_info=None, beacons=None):
     add_detail_str("Total Laps", str(total_laps))
     add_detail_str("Fastest Time", fastest_time_str)
 
-    ET.indent(root, space="  ")
+    indent_xml(root, space="  ")
     xml_str = ET.tostring(root, encoding="unicode")
     with open(filename, "w", encoding="utf-8") as f:
         f.write(xml_str)
-
