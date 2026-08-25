@@ -79,12 +79,29 @@ motec-log session.fit AUTO --csv --csv-wallclock
 motec-log session.rcz AUTO --g-source sensor --frequency 25
 ```
 
+RaceChrono multi-session backups require an explicit selection:
+
+```bash
+motec-log backup.rcz RCZ --list-sessions
+motec-log backup.rcz RCZ --session session_20260101_1000
+motec-log backup.rcz RCZ --session all
+motec-log backup.rcz RCZ --session all --output-dir converted_sessions
+```
+
+A selected session uses `<backup>_<session-id>.ld/.ldx` by default. Sessions
+with multiple stints add `_stintN`. `--session all` writes one verified pair per
+stint under `<backup>_sessions/` unless `--output-dir` is provided; it cannot be
+combined with `--output` or a specific `--stint`.
+
 Run `motec-log --help` for the authoritative option list.
 
 ## Behavior
 
 - RCZ sessions with multiple stints are split automatically when `--stint all`
   is used.
+- RaceChrono backup archives are detected without extraction. They produce no
+  output until `--session ID` or `--session all` is supplied; `--list-sessions`
+  reports the session ID, track, duration, lap count, and stints.
 - RCZ `--lap N` selects the reconstructed lap number within a stint and rebases
   that single-lap export to zero elapsed time.
 - `--min-lap-sec` controls the minimum reconstructed RCZ out/timed/in segment

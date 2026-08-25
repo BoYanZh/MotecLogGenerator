@@ -164,6 +164,122 @@ def _write_lapped_rcz(path, start_speed_mps=0.0):
         archive.writestr("channel_1_300_0_3_1", lat_lon.astype("<i4").tobytes())
 
 
+def _write_backup_rcz(path):
+    """Write a tiny RaceChrono backup containing two nested sessions."""
+    import zipfile
+
+    sessions = [
+        {
+            "id": "session_20260101_1000",
+            "timeCreated": 1_700_000_000_000,
+            "trackName": "Alpha Track",
+            "trackLocalUuid": "track-alpha",
+            "trackId": -1,
+            "gps_type": "100",
+            "stints": (0,),
+        },
+        {
+            "id": "session_20260102_1100",
+            "timeCreated": 1_700_100_000_000,
+            "trackName": "Beta Track",
+            "trackLocalUuid": None,
+            "trackId": -2,
+            "gps_type": "300",
+            "stints": (0, 1),
+        },
+    ]
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "json/track_storage.json",
+            json.dumps(
+                {
+                    "tracks": [
+                        {
+                            "id": -1,
+                            "localUuid": "track-alpha",
+                            "name": "Alpha Track",
+                            "traps": [
+                                {
+                                    "name": "Start",
+                                    "centerLatitude": 222_000_000,
+                                    "centerLongitude": -732_000_000,
+                                    "type": 1,
+                                }
+                            ],
+                        },
+                        {
+                            "id": -2,
+                            "localUuid": "track-beta",
+                            "name": "Beta Track",
+                            "traps": [
+                                {
+                                    "name": "Finish",
+                                    "centerLatitude": 222_600_000,
+                                    "centerLongitude": -731_400_000,
+                                    "type": 2,
+                                }
+                            ],
+                        },
+                    ]
+                }
+            ),
+        )
+        for session_index, descriptor in enumerate(sessions):
+            first_timestamp = descriptor["timeCreated"] + 10_000
+            laps = [
+                {
+                    "number": stint + 1,
+                    "sessionResume": stint,
+                    "startTimestamp": first_timestamp + 20_000,
+                    "finishTimestamp": first_timestamp + 50_000,
+                }
+                for stint in descriptor["stints"]
+            ]
+            session = {
+                "firstTimestamp": first_timestamp,
+                "latestTimestamp": first_timestamp + 60_000,
+                "timeCreated": descriptor["timeCreated"],
+                "lengthTime": 60_000,
+                "lapCount": len(laps),
+                "trackName": descriptor["trackName"],
+                "trackLocalUuid": descriptor["trackLocalUuid"],
+                "trackId": descriptor["trackId"],
+                "laps": laps,
+            }
+            root = "sessions/%s/" % descriptor["id"]
+            archive.writestr(root + "session.json", json.dumps(session))
+            for stint in descriptor["stints"]:
+                channel_root = root + ("resume_%s/" % stint if stint else "")
+                timestamps = np.arange(
+                    first_timestamp,
+                    first_timestamp + 61_000,
+                    1_000,
+                    dtype="<i8",
+                )
+                speed = np.full(
+                    len(timestamps), 10_000 + session_index * 1_000, dtype="<i4"
+                )
+                lat_lon = np.column_stack(
+                    (
+                        np.arange(len(timestamps), dtype="<i4") + 222_000_000,
+                        np.arange(len(timestamps), dtype="<i4") - 732_000_000,
+                    )
+                )
+                gps_type = descriptor["gps_type"]
+                archive.writestr(
+                    channel_root + "channel_1_%s_0_1_1" % gps_type,
+                    timestamps.tobytes(),
+                )
+                archive.writestr(
+                    channel_root + "channel_1_%s_0_4_0" % gps_type,
+                    speed.tobytes(),
+                )
+                archive.writestr(
+                    channel_root + "channel_1_%s_0_3_1" % gps_type,
+                    lat_lon.astype("<i4").tobytes(),
+                )
+
+
 # ---------------------------------------------------------------------------
 # CSV & PB BUDDY
 # ---------------------------------------------------------------------------
@@ -540,7 +656,10 @@ def test_xrk_units_time_origin_and_datetime():
     assert speed.units == "km/h"
     assert max(speed.values) > 100.0, "XRK m/s speed was labelled km/h without conversion"
     assert rpm.start() == 0.0
-    assert 4.7 < gps.start() < 4.8, "Per-channel time origins must not be collapsed to zero"
+    assert 0.0 < gps.start() < 0.1, "GPS must retain its shared-clock offset"
+    assert abs(gps.end() - rpm.end()) < 0.2, "GPS and logger clocks must stay aligned"
+    assert np.all(np.isfinite(gps.timestamps))
+    assert np.all(np.diff(gps.timestamps) > 0), "XRK timestamps must be unique and monotonic"
     assert log.datetime.strftime("%Y-%m-%d %H:%M:%S") == "2016-01-23 12:09:04"
 
 
@@ -741,6 +860,301 @@ def test_cli_rcz_end_to_end():
         source = os.path.join(tmp_dir, "minimal.rcz")
         _write_minimal_rcz(source)
         _assert_cli_roundtrip(source, "RCZ", expected_channels=("Pitch Angle",))
+
+
+def test_cli_rcz_backup_lists_sessions_without_exporting():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "backup.rcz")
+        _write_backup_rcz(source)
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--list-sessions",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "session_20260101_1000" in result.stdout
+        assert "Alpha Track" in result.stdout
+        assert "60.0s" in result.stdout
+        assert "session_20260102_1100" in result.stdout
+        assert "0,1" in result.stdout
+        assert not any(name.endswith((".ld", ".ldx")) for name in os.listdir(tmp_dir))
+
+
+def test_rcz_backup_target_session_reads_nested_channels_and_track_storage():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "backup.rcz")
+        _write_backup_rcz(source)
+
+        log = DataLog()
+        log.from_rcz_log(source, target_session="session_20260101_1000")
+
+        assert "Ground Speed" in log.channels
+        assert log.rcz_metadata["trackName"] == "Alpha Track"
+        assert log.duration() == 60.0
+        assert log.traps == [
+            {
+                "name": "Start",
+                "lat": 37.0,
+                "lon": -122.0,
+                "type": 1,
+            }
+        ]
+
+        fallback_log = DataLog()
+        fallback_log.from_rcz_log(
+            source,
+            target_session="session_20260102_1100",
+            target_stint=0,
+        )
+        assert "Ground Speed" in fallback_log.channels
+        assert fallback_log.traps[0]["name"] == "Finish"
+
+
+def test_cli_rcz_backup_requires_session_and_exports_selected_session():
+    from motec_log_generator._vendor.ldparser import ldData
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "backup.rcz")
+        _write_backup_rcz(source)
+
+        missing_selection = subprocess.run(
+            [sys.executable, "-m", "motec_log_generator", source, "RCZ"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert missing_selection.returncode == 1
+        assert "contains 2 sessions" in missing_selection.stdout
+        assert "--session ID" in missing_selection.stdout
+        assert not any(name.endswith((".ld", ".ldx")) for name in os.listdir(tmp_dir))
+
+        selected = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--session",
+                "session_20260101_1000",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert selected.returncode == 0, selected.stdout + selected.stderr
+        ld_path = os.path.join(tmp_dir, "backup_session_20260101_1000.ld")
+        ldx_path = os.path.splitext(ld_path)[0] + ".ldx"
+        assert ldData.fromfile(ld_path).channs
+        assert ET.parse(ldx_path).getroot().tag == "LDXFile"
+
+        invalid = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--session",
+                "session_missing",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert invalid.returncode == 1
+        assert "Unknown RCZ session ID 'session_missing'" in invalid.stdout
+
+
+def test_cli_rcz_backup_exports_all_with_preflight_and_stint_split():
+    from motec_log_generator._vendor.ldparser import ldData
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "backup.rcz")
+        _write_backup_rcz(source)
+        output_dir = os.path.join(tmp_dir, "backup_sessions")
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--session",
+                "all",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "3 succeeded, 0 failed" in result.stdout
+
+        stems = [
+            "session_20260101_1000",
+            "session_20260102_1100_stint0",
+            "session_20260102_1100_stint1",
+        ]
+        for stem in stems:
+            ld_path = os.path.join(output_dir, stem + ".ld")
+            ldx_path = os.path.join(output_dir, stem + ".ldx")
+            parsed = ldData.fromfile(ld_path)
+            running_time = next(
+                channel for channel in parsed.channs
+                if channel.name.strip() == "Running Time"
+            )
+            assert running_time.data[0] == 0
+            assert ET.parse(ldx_path).getroot().tag == "LDXFile"
+
+        blocked = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--session",
+                "all",
+                "--output-dir",
+                output_dir,
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert blocked.returncode == 1
+        assert "output already exists" in blocked.stdout
+        assert "Preflight failed; no sessions were exported" in blocked.stdout
+
+        forced = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--session",
+                "all",
+                "--output-dir",
+                output_dir,
+                "--force",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        assert forced.returncode == 0, forced.stdout + forced.stderr
+
+
+def test_cli_rcz_backup_rejects_ambiguous_all_options():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "backup.rcz")
+        _write_backup_rcz(source)
+        cases = [
+            (["--session", "all", "--output", "one.ld"], "--output"),
+            (["--session", "all", "--stint", "0"], "--stint all"),
+        ]
+        for options, expected in cases:
+            result = subprocess.run(
+                [sys.executable, "-m", "motec_log_generator", source, "RCZ"]
+                + options,
+                capture_output=True,
+                text=True,
+                cwd=ROOT,
+            )
+            assert result.returncode == 1
+            assert expected in result.stdout
+
+
+def test_cli_rcz_backup_all_continues_after_session_failure():
+    import zipfile
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "backup.rcz")
+        _write_backup_rcz(source)
+        with zipfile.ZipFile(source, "a", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(
+                "sessions/session_20260103_broken/session.json",
+                json.dumps(
+                    {
+                        "firstTimestamp": 1_700_200_000_000,
+                        "latestTimestamp": 1_700_200_010_000,
+                        "timeCreated": 1_700_200_000_000,
+                        "lengthTime": 10_000,
+                        "lapCount": 0,
+                        "trackName": "Broken Track",
+                        "laps": [],
+                    }
+                ),
+            )
+
+        output_dir = os.path.join(tmp_dir, "exports")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--session",
+                "all",
+                "--output-dir",
+                output_dir,
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+
+        assert result.returncode == 1
+        assert "3 succeeded, 1 failed" in result.stdout
+        assert "session_20260103_broken stint 0 failed" in result.stdout
+        assert os.path.isfile(
+            os.path.join(output_dir, "session_20260101_1000.ld")
+        )
+        assert not os.path.exists(
+            os.path.join(output_dir, "session_20260103_broken.ld")
+        )
+
+
+def test_cli_rcz_backup_selected_session_splits_multiple_stints():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "backup.rcz")
+        _write_backup_rcz(source)
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "motec_log_generator",
+                source,
+                "RCZ",
+                "--session",
+                "session_20260102_1100",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        expected_stem = os.path.join(
+            tmp_dir, "backup_session_20260102_1100_stint"
+        )
+        for stint in (0, 1):
+            assert os.path.isfile(expected_stem + str(stint) + ".ld")
+            assert os.path.isfile(expected_stem + str(stint) + ".ldx")
 
 
 def test_rcz_target_lap_rebases_time_and_lap_metadata():

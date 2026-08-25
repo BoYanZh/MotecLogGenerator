@@ -19,11 +19,14 @@ from ..derived import derive_yaw_rate_from_gps_heading
 _PARTIAL_OUT_LAP_SPEED_KMH = 5.0
 
 
-def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, min_lap_sec=15.0, mask_interp_gaps=False):
+def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
+                  min_lap_sec=15.0, mask_interp_gaps=False,
+                  target_session=None):
     """ Creates channels populated with messages directly from a RaceChrono .rcz archive.
 
     rcz_file_path: Path to the .rcz file
     target_lap: String, int, or None. If None or 'all', processes all laps in the session.
+    target_session: Nested session directory ID in a RaceChrono backup, or None.
     """
     import zipfile
     import json
@@ -42,10 +45,16 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
 
     with zipfile.ZipFile(rcz_file_path, 'r') as z:
         all_names = z.namelist()
-        prefix = ""
+        session_prefix = ""
+        if target_session is not None:
+            session_prefix = "sessions/%s/" % target_session
+            if session_prefix + "session.json" not in all_names:
+                raise ValueError("RCZ session not found: %s" % target_session)
+        prefix = session_prefix
         if target_stint is not None and str(target_stint).lower() != "all":
             stint_value = int(target_stint)
-            prefix = "resume_%s/" % stint_value if stint_value > 0 else ""
+            if stint_value > 0:
+                prefix += "resume_%s/" % stint_value
         namelist = [n[len(prefix):] for n in all_names if n.startswith(prefix)]
         def read_channel(name):
             return z.read(prefix + name)
@@ -70,27 +79,53 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None, m
         )
         _OBD_DEV4_TS_KEY  = "channel_4_101_0_1_1"
 
-        if "session.json" not in all_names:
+        session_key = session_prefix + "session.json"
+        if session_key not in all_names:
             print("ERROR: Invalid RCZ file, missing session.json")
             return
 
-        session_json = json.loads(z.read("session.json").decode("utf-8"))
+        session_json = json.loads(z.read(session_key).decode("utf-8"))
         first_t = session_json.get("firstTimestamp", 0)
 
-        if "trackId.json" in all_names:
-            try:
-                track_json = json.loads(z.read("trackId.json").decode("utf-8"))
+        traps_list = []
+        track_key = session_prefix + "trackId.json"
+        try:
+            if track_key in all_names:
+                track_json = json.loads(z.read(track_key).decode("utf-8"))
                 traps_list = track_json.get("track", {}).get("traps", [])
-                for t in traps_list:
-                    if "centerLatitude" in t and "centerLongitude" in t:
-                        data_log.traps.append({
-                            "name": t.get("name", "Split"),
-                            "lat": t["centerLatitude"] / 6000000.0,
-                            "lon": t["centerLongitude"] / 6000000.0,
-                            "type": t.get("type", 4)
-                        })
-            except Exception:
-                pass
+            elif session_prefix and "json/track_storage.json" in all_names:
+                track_storage = json.loads(
+                    z.read("json/track_storage.json").decode("utf-8")
+                )
+                tracks = track_storage.get("tracks", [])
+                track = next(
+                    (
+                        item for item in tracks
+                        if session_json.get("trackLocalUuid")
+                        and item.get("localUuid") == session_json.get("trackLocalUuid")
+                    ),
+                    None,
+                )
+                if track is None:
+                    track = next(
+                        (
+                            item for item in tracks
+                            if item.get("id") == session_json.get("trackId")
+                        ),
+                        None,
+                    )
+                if track:
+                    traps_list = track.get("traps", [])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            traps_list = []
+        for trap in traps_list:
+            if "centerLatitude" in trap and "centerLongitude" in trap:
+                data_log.traps.append({
+                    "name": trap.get("name", "Split"),
+                    "lat": trap["centerLatitude"] / 6000000.0,
+                    "lon": trap["centerLongitude"] / 6000000.0,
+                    "type": trap.get("type", 4),
+                })
 
         ts_ms = session_json.get("timeCreated") or session_json.get("firstTimestamp")
         if ts_ms and ts_ms > 1e8:

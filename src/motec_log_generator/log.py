@@ -404,9 +404,19 @@ class DataLog(object):
         from .parsers.pbbuddy_parser import parse_pbbuddy_log
         parse_pbbuddy_log(self, log_lines, target_lap=target_lap)
 
-    def from_rcz_log(self, rcz_file_path, target_lap=None, target_stint=None, min_lap_sec=15.0, mask_interp_gaps=False):
+    def from_rcz_log(self, rcz_file_path, target_lap=None, target_stint=None,
+                     min_lap_sec=15.0, mask_interp_gaps=False,
+                     target_session=None):
         from .parsers.rcz_parser import parse_rcz_log
-        parse_rcz_log(self, rcz_file_path, target_lap=target_lap, target_stint=target_stint, min_lap_sec=min_lap_sec, mask_interp_gaps=mask_interp_gaps)
+        parse_rcz_log(
+            self,
+            rcz_file_path,
+            target_lap=target_lap,
+            target_stint=target_stint,
+            min_lap_sec=min_lap_sec,
+            mask_interp_gaps=mask_interp_gaps,
+            target_session=target_session,
+        )
 
     def from_accessport_log(self, log_lines):
         from .parsers.accessport_parser import parse_accessport_log
