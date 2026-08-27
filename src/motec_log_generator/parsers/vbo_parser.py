@@ -9,6 +9,7 @@ import datetime
 from ..channels import CHANNEL_ALIASES
 from ..models import Message
 
+
 def _parse_vbo_latlon(val_str, is_lon=False):
     try:
         val_s = str(val_str).strip()
@@ -61,7 +62,7 @@ def parse_vbo_log(data_log, log_lines, target_lap=None):
                 pass
 
     cols_raw = sections.get("column names", [""])[0].split()
-    data_lines = [l for l in sections.get("data", []) if l]
+    data_lines = [line for line in sections.get("data", []) if line]
 
     if not cols_raw or not data_lines:
         print("ERROR: Invalid VBO file, missing [column names] or [data] section")

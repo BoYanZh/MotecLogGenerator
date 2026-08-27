@@ -1,25 +1,23 @@
 """Tests for CLI entrypoint, roundtrips, atomic writes, and file collision guards."""
 
 import os
-import subprocess
-import sys
 import tempfile
-from unittest.mock import patch
 import xml.etree.ElementTree as ET
+from unittest.mock import patch
 
-from motec_log_generator.log import DataLog
-from motec_log_generator.motec import MotecLog
-from motec_log_generator.output import atomic_write_motec_pair, ensure_output_targets
-from motec_log_generator.cli import _csv_output_path
-from motec_log_generator._vendor.ldparser import ldData
 from conftest import (
-    ROOT,
     EXAMPLES,
-    _sha256,
     _assert_cli_roundtrip,
     _import_or_skip,
     _run_cli_in_process,
+    _sha256,
 )
+
+from motec_log_generator._vendor.ldparser import ldData
+from motec_log_generator.cli import _csv_output_path
+from motec_log_generator.log import DataLog
+from motec_log_generator.motec import MotecLog
+from motec_log_generator.output import atomic_write_motec_pair, ensure_output_targets
 
 
 def test_cli_ld_ldx_roundtrip_and_overwrite_guard():

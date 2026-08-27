@@ -219,7 +219,7 @@ def parse_xrk_log(data_log, xrk_file_path, target_lap=None):
     if target_lap is not None and str(target_lap).lower() != "all":
         try:
             lap_no = int(target_lap)
-            lap_recs = [l for l in laps_info["laps"] if l["lap_num"] == lap_no]
+            lap_recs = [lap for lap in laps_info["laps"] if lap["lap_num"] == lap_no]
             if lap_recs:
                 t_lo = lap_recs[0]["start_time"]
                 t_hi = lap_recs[0]["end_time"]

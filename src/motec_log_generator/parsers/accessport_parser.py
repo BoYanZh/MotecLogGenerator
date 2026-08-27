@@ -5,7 +5,6 @@ Extracted from the original DataLog.accessport_log methods with identical behavi
 from __future__ import annotations
 
 
-
 def parse_accessport_log(data_log, log_lines):
     """ Creates channels populated with messages from a COBB Accessport CSV log file.
 

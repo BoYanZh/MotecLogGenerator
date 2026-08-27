@@ -1,7 +1,8 @@
 """Tests for Racelogic VBOX VBO format."""
 
+from conftest import _dedup_channels, _read_lines
+
 from motec_log_generator.log import DataLog
-from conftest import _read_lines, _dedup_channels
 
 
 def test_vbo_smoke():

@@ -9,7 +9,6 @@ import numpy as np
 from ._vendor.ldparser import ldChan, ldData, ldEvent, ldHead, ldVehicle, ldVenue
 
 if TYPE_CHECKING:
-    from .log import DataLog
     from .models import Channel
 
 

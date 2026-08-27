@@ -1,8 +1,10 @@
 """Tests for CAN log format with DBC."""
 
 import os
+
+from conftest import EXAMPLES, _dedup_channels, _import_or_skip, _read_lines
+
 from motec_log_generator.log import DataLog
-from conftest import EXAMPLES, _read_lines, _dedup_channels, _import_or_skip
 
 
 def test_can_smoke():

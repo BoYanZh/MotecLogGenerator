@@ -4,8 +4,9 @@ import os
 import struct
 import tempfile
 
-from motec_log_generator.log import DataLog
 from conftest import EXAMPLES, _dedup_channels
+
+from motec_log_generator.log import DataLog
 
 
 def test_ibt_smoke():

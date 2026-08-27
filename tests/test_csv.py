@@ -2,13 +2,14 @@
 
 import os
 import tempfile
-import numpy as np
 
+import numpy as np
+from conftest import _dedup_channels, _read_lines
+
+from motec_log_generator._vendor.ldparser import ldData
 from motec_log_generator.log import DataLog
 from motec_log_generator.motec import MotecLog
 from motec_log_generator.output import atomic_write_motec_pair
-from motec_log_generator._vendor.ldparser import ldData
-from conftest import _read_lines, _dedup_channels
 
 
 def test_csv_smoke():

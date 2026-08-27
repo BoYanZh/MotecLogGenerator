@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from .models import Message
 from .channels import (
     CH_ACCELERATOR_POS,
     CH_BRAKE_POS,
@@ -13,14 +12,14 @@ from .channels import (
     CH_CG_ACCEL_LAT_SMOOTH,
     CH_CG_ACCEL_LON,
     CH_CG_ACCEL_LON_SMOOTH,
+    CH_G_COMBINED,
     CH_GPS_HEADING,
     CH_GROUND_SPEED,
-    CH_G_COMBINED,
     CH_STEERING_ANGLE,
     CH_THROTTLE_POS,
     CH_YAW_RATE,
 )
-
+from .models import Message
 
 DEFAULT_GEAR_RATIO_THRESHOLDS = (110.0, 70.0, 52.0, 42.0, 33.0, 20.0)
 def calculate_math_channels(data_log, g_source="auto", gear_ratio_thresholds=None):
@@ -55,7 +54,7 @@ def calculate_math_channels(data_log, g_source="auto", gear_ratio_thresholds=Non
 
 def derive_gear_from_rpm_speed(data_log, ratio_thresholds=None):
     """Derive integer Gear (1-6) from timestamp-aligned RPM/speed ratios."""
-    from .channels import CH_GEAR, CH_ENGINE_RPM, CH_GROUND_SPEED
+    from .channels import CH_ENGINE_RPM, CH_GEAR, CH_GROUND_SPEED
     if CH_GEAR in data_log.channels:
         return
     if CH_ENGINE_RPM not in data_log.channels or CH_GROUND_SPEED not in data_log.channels:

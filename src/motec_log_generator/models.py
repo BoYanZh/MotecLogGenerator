@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import math
-
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import numpy as np
 

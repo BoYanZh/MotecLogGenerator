@@ -1,6 +1,5 @@
 """Shared fixtures and test helpers for MotecLogGenerator test suite."""
 
-import csv
 import hashlib
 import importlib
 import json
@@ -12,10 +11,6 @@ import xml.etree.ElementTree as ET
 from unittest import SkipTest
 
 import numpy as np
-import pytest
-
-from motec_log_generator.log import DataLog
-from motec_log_generator.models import Message
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 EXAMPLES = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -48,6 +43,7 @@ def _sha256(path):
 def _run_cli_in_process(args):
     """Run CLI main() in-process, capturing stdout/stderr and exit code."""
     from io import StringIO
+
     from motec_log_generator.cli import main
 
     old_stdout, old_stderr = sys.stdout, sys.stderr

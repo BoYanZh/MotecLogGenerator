@@ -4,7 +4,6 @@ Extracted from the original DataLog.csv_log methods with identical behavior."""
 
 from __future__ import annotations
 
-from ..models import Message
 
 def parse_csv_log(data_log, log_lines):
     """ Creates channels populated with messages from a CSV log file.

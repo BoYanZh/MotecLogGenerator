@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from ..channels import CH_GPS_ALTITUDE, CH_GPS_LATITUDE, CH_GPS_LONGITUDE, CH_GROUND_SPEED
 from .xml_utils import indent_xml
 
+
 def _find_gps_channels(data_log):
     lat = data_log.channels.get(CH_GPS_LATITUDE) or data_log.channels.get("Real GPS Latitude")
     lon = data_log.channels.get(CH_GPS_LONGITUDE) or data_log.channels.get("Real GPS Longitude")
@@ -38,7 +39,6 @@ def _iter_gps_trackpoints(data_log, target_hz=5.0):
         yield lat, lon, alt, spd
 
 def write_gpx(motec_log, gpx_filename, data_log):
-    import xml.etree.ElementTree as ET
 
     points = list(_iter_gps_trackpoints(data_log))
     if not points:
@@ -67,7 +67,6 @@ def write_gpx(motec_log, gpx_filename, data_log):
     return True
 
 def write_kml(motec_log, kml_filename, data_log):
-    import xml.etree.ElementTree as ET
 
     points = list(_iter_gps_trackpoints(data_log))
     if not points:

@@ -6,17 +6,21 @@ from __future__ import annotations
 
 import datetime
 
-from ..models import Message
 from ..channels import (
-    CH_LAP_NUMBER, CH_GROUND_SPEED, CH_GPS_LATITUDE, CH_GPS_LONGITUDE,
-    CH_GPS_HEADING, CH_GPS_ALTITUDE,
+    CH_GPS_ALTITUDE,
+    CH_GPS_HEADING,
+    CH_GPS_LATITUDE,
+    CH_GPS_LONGITUDE,
+    CH_GROUND_SPEED,
+    CH_LAP_NUMBER,
 )
+from ..models import Message
+
 
 def parse_pbbuddy_log(data_log, log_lines, target_lap=None):
     """ Creates channels populated with messages from a PB Buddy CSV log file. """
     data_log.clear()
     data_log.laps_info = {}
-    file_p = getattr(data_log, "log_file_path", "")
 
     if not log_lines:
         return

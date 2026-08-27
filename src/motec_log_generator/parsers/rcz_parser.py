@@ -6,15 +6,22 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..models import Message
-from ..interpolation import _interp_zoh, _mask_interp_gaps
 from ..channels import (
-    RCZ_PID_MAP, CH_LAP_NUMBER, CH_RUNNING_TIME, CH_YAW_RATE, CH_CG_ACCEL_LAT,
-    CH_CG_ACCEL_LON, CH_GROUND_SPEED, CH_GPS_LATITUDE, CH_GPS_LONGITUDE,
-    CH_GPS_HEADING, CH_GPS_ALTITUDE, CH_LEAN_ANGLE,
+    CH_CG_ACCEL_LAT,
+    CH_CG_ACCEL_LON,
+    CH_GPS_ALTITUDE,
+    CH_GPS_HEADING,
+    CH_GPS_LATITUDE,
+    CH_GPS_LONGITUDE,
+    CH_GROUND_SPEED,
+    CH_LAP_NUMBER,
+    CH_LEAN_ANGLE,
+    CH_RUNNING_TIME,
+    CH_YAW_RATE,
+    RCZ_PID_MAP,
 )
 from ..derived import derive_yaw_rate_from_gps_heading
-
+from ..interpolation import _interp_zoh, _mask_interp_gaps
 
 _PARTIAL_OUT_LAP_SPEED_KMH = 5.0
 
@@ -28,9 +35,9 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
     target_lap: String, int, or None. If None or 'all', processes all laps in the session.
     target_session: Nested session directory ID in a RaceChrono backup, or None.
     """
-    import zipfile
     import json
     import os
+    import zipfile
 
     data_log.clear()
     data_log.laps_info = {}
@@ -207,11 +214,11 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
 
         # Group raw laps by stint
         stints_map = {}
-        for l in laps_raw:
-            st_id = int(l.get("sessionResume", 0))
+        for lap in laps_raw:
+            st_id = int(lap.get("sessionResume", 0))
             if st_id not in stints_map:
                 stints_map[st_id] = []
-            stints_map[st_id].append(l)
+            stints_map[st_id].append(lap)
 
         stint_laps = stints_map.get(active_stint, [])
 
@@ -222,14 +229,14 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
 
         # Filter raw laps that actually overlap with binary recording range
         overlapping_laps = []
-        for l in stint_laps:
-            s_ms = l.get("startTimestamp")
-            f_ms = l.get("finishTimestamp")
+        for lap in stint_laps:
+            s_ms = lap.get("startTimestamp")
+            f_ms = lap.get("finishTimestamp")
             if not s_ms:
                 continue
             cmp_end = f_ms if f_ms is not None else stint_end_ms
             if s_ms < stint_end_ms and cmp_end > stint_start_ms:
-                overlapping_laps.append(l)
+                overlapping_laps.append(lap)
 
         reconstructed_laps = []
 
@@ -260,10 +267,10 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
             })
 
         # 2. Timed Laps & In Lap inside recording window
-        for l in overlapping_laps:
-            s_ms = l.get("startTimestamp")
-            f_ms = l.get("finishTimestamp")
-            orig_num = l.get("number")
+        for lap in overlapping_laps:
+            s_ms = lap.get("startTimestamp")
+            f_ms = lap.get("finishTimestamp")
+            orig_num = lap.get("number")
 
             start_s = max(0.0, (s_ms - stint_start_ms) / 1000.0)
 

@@ -2,24 +2,22 @@
 
 import json
 import os
-import subprocess
-import sys
 import tempfile
 import xml.etree.ElementTree as ET
-import numpy as np
 
+import numpy as np
+from conftest import (
+    _assert_cli_roundtrip,
+    _run_cli_in_process,
+    _write_backup_rcz,
+    _write_lapped_rcz,
+    _write_minimal_rcz,
+)
+
+from motec_log_generator._vendor.ldparser import ldData
 from motec_log_generator.log import DataLog
 from motec_log_generator.motec import MotecLog
 from motec_log_generator.output import atomic_write_motec_pair
-from motec_log_generator._vendor.ldparser import ldData
-from conftest import (
-    ROOT,
-    _write_minimal_rcz,
-    _write_lapped_rcz,
-    _write_backup_rcz,
-    _assert_cli_roundtrip,
-    _run_cli_in_process,
-)
 
 
 def test_cli_rcz_end_to_end():

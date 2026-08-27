@@ -15,8 +15,7 @@ from .channels import (
     CH_RUNNING_TIME,
     TRACK_BEACONS,
 )
-from .interpolation import _interp_zoh, _mask_interp_gaps
-from .models import Channel, Message
+from .models import Channel
 
 
 def _parse_vbo_latlon(val_str, is_lon=False):
@@ -240,7 +239,6 @@ class DataLog(object):
         )
 
     def _extract_datetime_from_text(self, log_lines, file_path=""):
-        import datetime
         import os
         import re
 

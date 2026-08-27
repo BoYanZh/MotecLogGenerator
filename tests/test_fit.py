@@ -2,10 +2,11 @@
 
 import os
 import warnings
+
 import numpy as np
+from conftest import EXAMPLES, _dedup_channels, _import_or_skip
 
 from motec_log_generator.log import DataLog
-from conftest import EXAMPLES, _dedup_channels, _import_or_skip
 
 
 def test_fit_smoke():

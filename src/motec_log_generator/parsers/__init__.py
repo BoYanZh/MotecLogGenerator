@@ -1,8 +1,7 @@
 """Input format parsers and registry for MotecLogGenerator."""
 from __future__ import annotations
 
-import os
-from typing import Callable, NamedTuple, Optional, Sequence
+from typing import NamedTuple
 
 
 class ParserInfo(NamedTuple):

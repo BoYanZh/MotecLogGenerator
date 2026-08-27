@@ -1,12 +1,12 @@
 """Tests for data interpolation, resampling, and math/derived channel processing."""
 
 import numpy as np
+from conftest import _read_lines
 
+from motec_log_generator.derived import derive_gear_from_rpm_speed
+from motec_log_generator.interpolation import _interp_zoh
 from motec_log_generator.log import DataLog
 from motec_log_generator.models import Message
-from motec_log_generator.interpolation import _interp_zoh
-from motec_log_generator.derived import derive_gear_from_rpm_speed
-from conftest import _read_lines
 
 
 def test_g_source_modes():

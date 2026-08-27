@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..channels import IBT_BRAKE_PRESS_MAP, IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP, CH_LAP_NUMBER
+from ..channels import CH_LAP_NUMBER, IBT_BRAKE_PRESS_MAP, IBT_CHANNEL_MAP, IBT_WHEEL_SPEED_MAP
 from ..models import Message
+
 
 def parse_ibt_log(data_log, ibt_file_path):
     """ Creates channels populated with messages from an iRacing native .ibt binary telemetry file.

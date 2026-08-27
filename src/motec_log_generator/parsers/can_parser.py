@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from ..models import Message
 
+
 def _parse_can_log_line(line):
     try:
         stamp, bus, msg = line.split()
