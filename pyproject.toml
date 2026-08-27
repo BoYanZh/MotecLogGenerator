@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "motec-log-generator"
-version = "2.0.0"
+dynamic = ["version"]
 description = "Convert motorsports telemetry logs to MoTeC LD/LDX files."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -25,6 +25,7 @@ dev = [
   "fitparse>=1.2",
   "libxrk>=0.13; python_version >= '3.10'",
   "pytest>=8",
+  "ruff>=0.5",
 ]
 
 [project.scripts]
@@ -40,8 +41,25 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.dynamic]
+version = { attr = "motec_log_generator.__version__" }
+
 [tool.setuptools.package-data]
 "motec_log_generator._vendor" = ["LDParser.LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+exclude = [
+  "src/motec_log_generator/_vendor",
+  "build",
+  "dist",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+

@@ -22,8 +22,16 @@ class MotecLog(object):
 
     This operates on containers from the data_log library.
     """
-    # Pointers to locations in the file where data sections should be written. These have been
-    # determined from inspecting some MoTeC .ld files, and were consistent across all files.
+    # Fixed byte offsets for MoTeC LD v1.x binary container format.
+    # The MoTeC LD binary file layout consists of fixed-offset metadata blocks
+    # followed by an array of channel metadata headers and subsequent raw sample data:
+    #   - 0..1761: ldHead (root header with pointers to event, venue, and channel list)
+    #   - 1762: ldVehicle (vehicle metadata: id, weight, type, comments)
+    #   - 5078: ldVenue (venue / track metadata)
+    #   - 8180: ldEvent (session and event metadata)
+    #   - 11336: First ldChan channel metadata descriptor
+    #   - 11336 + N * CHANNEL_HEADER_SIZE: Start of sequential channel sample data payloads
+    # These offsets conform to the reverse-engineered MoTeC binary container layout implemented in ldparser.
     VEHICLE_PTR = 1762
     VENUE_PTR = 5078
     EVENT_PTR = 8180
@@ -108,6 +116,15 @@ class MotecLog(object):
         for ch in self.ld_channels:
             ch.data_ptr = data_ptr
             data_ptr += ch._data.nbytes
+
+        # Validate pointer layout integrity before serialization
+        assert self.ld_header.data_ptr >= self.HEADER_PTR + n * self.CHANNEL_HEADER_SIZE, (
+            "Data pointer overlaps with channel headers"
+        )
+        for i, ch in enumerate(self.ld_channels):
+            assert ch.meta_ptr == meta_base + i * self.CHANNEL_HEADER_SIZE
+            if i < n - 1:
+                assert ch.next_meta_ptr == ch.meta_ptr + self.CHANNEL_HEADER_SIZE
 
     def write(self, filename):
         if not self.ld_channels:

@@ -126,6 +126,7 @@ def parse_xrk_log(data_log, xrk_file_path, target_lap=None):
 
     # AIM channel and lap timecodes share one log-relative millisecond clock.
     # Preserve their offsets by selecting one global origin for the session.
+    # See docs/research/libxrk-0.13-timestamp-semantics.md for details on libxrk>=0.13 clock unwrapping.
     origins_ms = []
     for table in raw_channels.values():
         if table is None or table.num_rows == 0:

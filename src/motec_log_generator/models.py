@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import math
 
+from typing import Iterable, Sequence
+
 import numpy as np
 
 from .channels import DISCRETE_CHANNELS
@@ -20,7 +22,7 @@ class Message(object):
         return ("t=%f, value=%f" % (self.timestamp, self.value))
 
 
-class MessageListProxy:
+class MessageListProxy(Sequence[Message]):
     """Zero-copy / lazy list proxy over Channel timestamps and values arrays."""
     def __init__(self, channel: Channel):
         self._channel = channel

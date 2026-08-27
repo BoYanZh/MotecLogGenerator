@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import json
@@ -106,32 +107,7 @@ def _csv_output_path(ld_filename, source_path):
     return csv_filename
 
 
-def auto_detect_log_type(file_path):
-    if file_path.lower().endswith(".ibt"):
-        return "IBT"
-    if file_path.endswith(".rcz"):
-        return "RCZ"
-    if file_path.lower().endswith((".xrk", ".xrz")):
-        return "XRK"
-    if file_path.lower().endswith(".fit"):
-        return "FIT"
-    try:
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            sample = f.read(2048)
-        if file_path.lower().endswith(".vbo") or "[header]" in sample or "[column names]" in sample:
-            return "VBO"
-        if "RaceChrono" in sample or "RaceStudio" in sample or "Solo" in sample or "GPS_LatAcc" in sample:
-            return "RACECHRONO"
-        if "Session ID" in sample or "Track ID" in sample or "PB Buddy" in sample:
-            return "PBBUDDY"
-        if "Time,GPS Latitude" in sample:
-            return "PBBUDDY"
-        if "Time," in sample and "RPM" in sample:
-            return "ACCESSPORT"
-    except Exception:
-        pass
-    return "CSV"
-
+from .parsers import auto_detect_log_type
 
 _auto_detect_log_type = auto_detect_log_type
 

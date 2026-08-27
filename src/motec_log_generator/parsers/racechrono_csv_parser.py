@@ -1,6 +1,7 @@
 """Parser for RACECHRONO telemetry log files.
 
 Extracted from the original DataLog.racechrono_log methods with identical behavior."""
+from __future__ import annotations
 
 import math
 

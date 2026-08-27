@@ -5,6 +5,7 @@ Provides a Single Source of Truth for:
   - Canonical MoTeC channel names and standard units.
   - Multi-source channel alias mappings (iRacing, RaceChrono, AiM Solo, PB Buddy, VBOX, Cobb, Generic CSVs).
 """
+from __future__ import annotations
 
 import numpy as np
 

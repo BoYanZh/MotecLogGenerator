@@ -1,6 +1,6 @@
 """ Parser for MoTec ld files
-
-Code created through reverse engineering the data format.
+Vendored from: https://github.com/gotzl/ldparser (GPL-3.0, see LDParser.LICENSE)
+Code created through reverse engineering the MoTeC LD data format.
 """
 
 import datetime

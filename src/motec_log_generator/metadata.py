@@ -1,4 +1,6 @@
 """Venue-name normalization for MoTeC log metadata."""
+from __future__ import annotations
+
 
 def normalize_venue(name):
     if not name:

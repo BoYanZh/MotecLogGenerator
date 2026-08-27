@@ -1,5 +1,10 @@
-"""Interpolation helpers for time-series channel data."""
+from __future__ import annotations
+
 import numpy as np
+
+# Largest sane sensor dropout interval (in milliseconds) before treating missing data
+# as an intentional logging gap / dropout that should be masked as NaN.
+DEFAULT_GAP_THRESHOLD_MS: float = 1000.0
 
 
 def _interp_zoh(times_target, times_src, values_src):
@@ -8,7 +13,7 @@ def _interp_zoh(times_target, times_src, values_src):
     return values_src[idx]
 
 
-def _mask_interp_gaps(values, times_target, times_src, gap_threshold_ms=1000.0):
+def _mask_interp_gaps(values, times_target, times_src, gap_threshold_ms=DEFAULT_GAP_THRESHOLD_MS):
     """Set interpolated values to NaN where consecutive source samples are
     separated by more than gap_threshold_ms (dropped frames / gap artifacts).
     """
