@@ -105,8 +105,7 @@ def _write_minimal_rcz(path):
     first_timestamp = 1_700_000_000_000
     timestamps = np.arange(first_timestamp, first_timestamp + 500, 100, dtype="<i8")
     speed = np.array([10_000, 12_000, 14_000, 16_000, 18_000], dtype="<i4")
-    uptimes = np.frombuffer(timestamps.tobytes(), dtype="<i4")[::2]
-    obd_times = np.column_stack((uptimes, np.zeros_like(uptimes))).astype("<i4")
+    obd_times = timestamps.copy()
     pitch = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype="<f8")
     lat_lon = np.array(
         [

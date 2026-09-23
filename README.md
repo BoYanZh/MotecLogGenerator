@@ -104,6 +104,10 @@ Run `motec-log --help` for the authoritative option list.
   reports the session ID, track, duration, lap count, and stints.
 - RCZ `--lap N` selects the reconstructed lap number within a stint and rebases
   that single-lap export to zero elapsed time.
+- RCZ timestamp streams are decoded as full 64-bit Unix milliseconds. Channel
+  timestamps remain zero-based seconds for MoTeC compatibility, while
+  `DataLog.time_origin_epoch_ms` and `DataLog.datetime_utc` preserve the exact
+  absolute origin for callers that need wall-clock alignment.
 - `--min-lap-sec` controls the minimum reconstructed RCZ out/timed/in segment
   duration; the legacy `--min_lap_sec` spelling remains accepted.
 - An RCZ leading segment that starts at 5 km/h or faster is retained as a

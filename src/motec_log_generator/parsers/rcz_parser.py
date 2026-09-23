@@ -4,6 +4,8 @@ Extracted from the original DataLog.rcz_log methods with identical behavior."""
 
 from __future__ import annotations
 
+import datetime
+
 import numpy as np
 
 from ..channels import (
@@ -24,6 +26,36 @@ from ..derived import derive_yaw_rate_from_gps_heading
 from ..interpolation import _interp_zoh, _mask_interp_gaps
 
 _PARTIAL_OUT_LAP_SPEED_KMH = 5.0
+_MIN_EPOCH_MS = 100_000_000_000
+_EPOCH_REFERENCE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+
+def _decode_epoch_ms(data, reference_ms=None):
+    """Return a monotonic int64 Unix-ms stream, or None if implausible."""
+    if len(data) < 8 or len(data) % 8:
+        return None
+    values = np.frombuffer(data, dtype="<i8")
+    if len(values) == 0 or int(values[0]) < _MIN_EPOCH_MS:
+        return None
+    if len(values) > 1 and np.any(np.diff(values) < 0):
+        return None
+    if reference_ms and abs(int(values[0]) - int(reference_ms)) > _EPOCH_REFERENCE_WINDOW_MS:
+        return None
+    return values
+
+
+def _relative_epoch_seconds(epoch_ms, origin_epoch_ms):
+    return (epoch_ms.astype(np.float64) - float(origin_epoch_ms)) / 1000.0
+
+
+def _set_absolute_origin(data_log, epoch_ms):
+    origin_ms = int(round(float(epoch_ms)))
+    data_log.time_origin_epoch_ms = origin_ms
+    data_log.datetime_utc = datetime.datetime.fromtimestamp(
+        origin_ms / 1000.0, tz=datetime.timezone.utc
+    )
+    # Keep the existing local-naive DataLog.datetime contract for exporters.
+    data_log.datetime = datetime.datetime.fromtimestamp(origin_ms / 1000.0)
 
 
 def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
@@ -80,9 +112,8 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
             for device_type in ("300", "200", "100")
         )
         _GPS_TS_KEYS = tuple(
-            f"channel_1_{device_type}_0_{timestamp_channel}_1"
+            f"channel_1_{device_type}_0_1_1"
             for device_type in ("300", "200", "100")
-            for timestamp_channel in ("1", "2")
         )
         _OBD_DEV4_TS_KEY  = "channel_4_101_0_1_1"
 
@@ -134,10 +165,15 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
                     "type": trap.get("type", 4),
                 })
 
-        ts_ms = session_json.get("timeCreated") or session_json.get("firstTimestamp")
+        created_ms = session_json.get("timeCreated")
+        if created_ms and created_ms > 1e8:
+            data_log.session_created_epoch_ms = int(created_ms)
+        ts_ms = created_ms or session_json.get("firstTimestamp")
         if ts_ms and ts_ms > 1e8:
-            import datetime
             data_log.datetime = datetime.datetime.fromtimestamp(ts_ms / 1000.0)
+            data_log.datetime_utc = datetime.datetime.fromtimestamp(
+                ts_ms / 1000.0, tz=datetime.timezone.utc
+            )
         else:
             data_log.datetime = data_log._extract_datetime_from_text([], rcz_file_path)
 
@@ -164,34 +200,32 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
             except ValueError:
                 pass
         time_file = None
+        timestamps_ms = None
+        epoch_reference = session_json.get("firstTimestamp") or session_json.get("timeCreated")
         for candidate in _GPS_TS_KEYS:
             if candidate in namelist:
-                time_file = candidate
-                break
+                decoded = _decode_epoch_ms(read_channel(candidate), epoch_reference)
+                if decoded is not None:
+                    time_file = candidate
+                    timestamps_ms = decoded
+                    break
 
         if not time_file:
             for name in namelist:
                 if name.startswith("channel_") and name.endswith("_1_1"):
-                    time_file = name
-                    break
+                    decoded = _decode_epoch_ms(read_channel(name), epoch_reference)
+                    if decoded is not None:
+                        time_file = name
+                        timestamps_ms = decoded
+                        break
 
-        if not time_file:
+        if not time_file or timestamps_ms is None:
             print("ERROR: Could not find timestamp channel in RCZ file")
             return
 
-        t_data = read_channel(time_file)
-        timestamps_ms = np.frombuffer(t_data, dtype="<i8")
-        uptimes_ms = np.frombuffer(t_data, dtype="<i4")[::2].astype(np.float64)
-        stint_uptime_start = uptimes_ms[0] if len(uptimes_ms) else 0.0
-
-        if len(timestamps_ms) > 0 and timestamps_ms[0] > 1e8:
-            import datetime
-            data_log.datetime = datetime.datetime.fromtimestamp(timestamps_ms[0] / 1000.0)
-
-        times_sec = (timestamps_ms - first_t) / 1000.0
-        # Normalize RCZ time so every exported MoTeC session starts at zero.
-        time_origin = float(times_sec[0]) if len(times_sec) else 0.0
-        times_sec = times_sec - time_origin
+        time_origin_epoch_ms = int(timestamps_ms[0])
+        _set_absolute_origin(data_log, time_origin_epoch_ms)
+        times_sec = _relative_epoch_seconds(timestamps_ms, time_origin_epoch_ms)
         n_samples = len(times_sec)
 
         # Resolve the GPS channels before reconstructing laps so a recording
@@ -359,8 +393,8 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
         original_sample_times = times_sec[mask]
         if len(original_sample_times) > 0 and len(timestamps_ms) > 0 and timestamps_ms[0] > 1e8:
             actual_start_ms = timestamps_ms[0] + (original_sample_times[0] * 1000.0)
-            import datetime
-            data_log.datetime = datetime.datetime.fromtimestamp(actual_start_ms / 1000.0)
+            _set_absolute_origin(data_log, actual_start_ms)
+        data_log.rcz_metadata["timeOriginEpochMs"] = data_log.time_origin_epoch_ms
 
         # Store laps_info for ldx export
         fastest_lap_num = 1
@@ -431,11 +465,13 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
         # GPS at 25.000 Hz) which accumulates to 48-sample / 1.9 s error over a
         # 1115 s session, causing a measurable lag in the exported data.
         def _imu_times(ts_key):
-            """Return relative time array (seconds, vs stint_uptime_start) for a device ts file."""
+            """Return relative seconds for a device's int64 epoch stream."""
             if ts_key not in namelist:
                 return None
-            raw = np.frombuffer(read_channel(ts_key), dtype="<i4")
-            return (raw[::2].astype(np.float64) - stint_uptime_start) / 1000.0
+            raw = _decode_epoch_ms(read_channel(ts_key), time_origin_epoch_ms)
+            if raw is None:
+                return None
+            return _relative_epoch_seconds(raw, time_origin_epoch_ms)
 
         def _parse_imu_channel(
             ch_key, out_name, units, scale, decimals=2, ts_key=None
@@ -522,13 +558,12 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
                 continue
             dev_sub = parts[2]
             pid = parts[3]
-            raw_time_data = np.frombuffer(read_channel(name), dtype="<i4")
+            raw_times = _decode_epoch_ms(read_channel(name), time_origin_epoch_ms)
             dir_prefix = os.path.dirname(name)
             companion_fname = f"channel2_12_{dev_sub}_{pid}_{pid}_3"
             companion = (dir_prefix + "/" + companion_fname) if dir_prefix else companion_fname
-            if companion not in namelist or len(raw_time_data) < 2 or len(raw_time_data) % 2:
+            if companion not in namelist or raw_times is None:
                 continue
-            raw_times = raw_time_data[::2].astype(np.float64)
             # Correct binary format: float64 (double precision, 8 bytes per value)
             value_data = np.frombuffer(read_channel(companion), dtype="<f8")
             count = min(len(raw_times), len(value_data))
@@ -536,7 +571,7 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
                 continue
             raw_times = raw_times[:count]
             raw_values = value_data[:count]
-            rel_times = (raw_times - stint_uptime_start) / 1000.0
+            rel_times = _relative_epoch_seconds(raw_times, time_origin_epoch_ms)
             if rel_times[-1] <= 0:
                 continue
             if pid == "1004":
@@ -583,10 +618,9 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
                 n for n in namelist
                 if os.path.basename(n) == os.path.basename(_OBD_DEV4_TS_KEY)
             )
-            raw_obd4_ts = np.frombuffer(read_channel(actual_key), dtype="<i4")
-            if len(raw_obd4_ts) >= 2 and len(raw_obd4_ts) % 2 == 0:
-                obd4_uptimes = raw_obd4_ts[::2].astype(np.float64)
-                obd4_rel_times = (obd4_uptimes - stint_uptime_start) / 1000.0
+            obd4_epoch_ms = _decode_epoch_ms(read_channel(actual_key), time_origin_epoch_ms)
+            if obd4_epoch_ms is not None:
+                obd4_rel_times = _relative_epoch_seconds(obd4_epoch_ms, time_origin_epoch_ms)
                 # Merge standard map with device-4-specific overrides
                 dev4_map = {**rcz_pid_map, **{
                     k: v for k, v in rcz_dev4_pid_overrides.items() if v is not None
@@ -610,7 +644,7 @@ def parse_rcz_log(data_log, rcz_file_path, target_lap=None, target_stint=None,
                     if val_key is None:
                         continue
                     value_data = np.frombuffer(read_channel(val_key), dtype="<f8")
-                    count = min(len(obd4_uptimes), len(value_data))
+                    count = min(len(obd4_epoch_ms), len(value_data))
                     if count < 2:
                         continue
                     rel_t = obd4_rel_times[:count]

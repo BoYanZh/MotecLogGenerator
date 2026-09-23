@@ -4,6 +4,8 @@ import json
 import os
 import tempfile
 import xml.etree.ElementTree as ET
+import zipfile
+from datetime import timezone
 
 import numpy as np
 from conftest import (
@@ -25,6 +27,86 @@ def test_cli_rcz_end_to_end():
         source = os.path.join(tmp_dir, "minimal.rcz")
         _write_minimal_rcz(source)
         _assert_cli_roundtrip(source, "RCZ", expected_channels=("Pitch Angle",))
+
+
+def test_rcz_preserves_canonical_absolute_time_origin():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "minimal.rcz")
+        _write_minimal_rcz(source)
+
+        log = DataLog()
+        log.from_rcz_log(source)
+
+        assert log.time_origin_epoch_ms == 1_700_000_000_000
+        assert log.session_created_epoch_ms == 1_700_000_000_000
+        assert log.datetime_utc.tzinfo == timezone.utc
+        assert log.datetime_utc.timestamp() == 1_700_000_000.0
+        assert log.rcz_metadata["timeOriginEpochMs"] == 1_700_000_000_000
+
+
+def test_rcz_rejects_non_epoch_gps_channel_2_as_timestamp(capsys):
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "bad_timestamp.rcz")
+        first = 1_700_000_000_000
+        session = {
+            "firstTimestamp": first,
+            "timeCreated": first,
+            "trackName": "Synthetic Test Track",
+            "laps": [],
+        }
+        not_epoch = np.array([0, 48, 105, 141, 176], dtype="<i8")
+        with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("session.json", json.dumps(session))
+            archive.writestr("channel_1_300_0_2_1", not_epoch.tobytes())
+
+        log = DataLog()
+        log.from_rcz_log(source)
+
+        assert log.channels == {}
+        assert log.time_origin_epoch_ms is None
+        assert "Could not find timestamp channel" in capsys.readouterr().out
+
+
+def test_rcz_int64_device_timestamps_survive_low32_rollover():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        source = os.path.join(tmp_dir, "rollover.rcz")
+        wrap = 2**32
+        base = ((1_700_000_000_000 // wrap) + 1) * wrap - 100
+        timestamps = (base + np.array([0, 50, 100, 150, 200])).astype("<i8")
+        speed = np.full(5, 10_000, dtype="<i4")
+        lat_lon = np.column_stack((
+            np.arange(5, dtype="<i4") + 222_000_000,
+            np.arange(5, dtype="<i4") - 732_000_000,
+        ))
+        pitch = np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype="<f8")
+        lateral_g_raw = np.array([1000, 2000, 3000, 4000, 5000], dtype="<i4")
+        session = {
+            "firstTimestamp": int(base),
+            "timeCreated": int(base),
+            "trackName": "Synthetic Test Track",
+            "laps": [],
+        }
+        with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("session.json", json.dumps(session))
+            archive.writestr("channel_1_300_0_1_1", timestamps.tobytes())
+            archive.writestr("channel_1_300_0_4_0", speed.tobytes())
+            archive.writestr("channel_1_300_0_3_1", lat_lon.tobytes())
+            archive.writestr("channel_2_201_0_1_1", timestamps.tobytes())
+            archive.writestr("channel_2_201_0_10_0", lateral_g_raw.tobytes())
+            archive.writestr("channel_12_100_8_8_1_1", timestamps.tobytes())
+            archive.writestr("channel2_12_100_8_8_3", pitch.tobytes())
+
+        log = DataLog()
+        log.from_rcz_log(source)
+
+        channel = log.channels["Pitch Angle"]
+        assert np.allclose(channel.timestamps, [0.0, 0.05, 0.10, 0.15, 0.20])
+        assert np.allclose(channel.values, [-2.0, -1.0, 0.0, 1.0, 2.0])
+        assert np.allclose(
+            log.channels["CG Accel Lateral"].values,
+            [0.1, 0.2, 0.3, 0.4, 0.5],
+        )
+        assert log.time_origin_epoch_ms == int(base)
 
 
 def test_cli_rcz_backup_lists_sessions_without_exporting():
@@ -285,6 +367,7 @@ def test_rcz_target_lap_rebases_time_and_lap_metadata():
         assert log.laps_info["fastest_lap"] == 2
         assert log.laps_info["fastest_time"] == 30.0
         assert log.laps_info["session_duration"] == 30.0
+        assert log.time_origin_epoch_ms == 1_700_000_020_000
 
         motec = MotecLog()
         motec.initialize()

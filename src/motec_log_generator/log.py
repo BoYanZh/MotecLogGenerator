@@ -49,12 +49,18 @@ class DataLog(object):
         self.name = name
         self.channels = {}
         self.datetime = None
+        self.datetime_utc = None
+        self.time_origin_epoch_ms = None
+        self.session_created_epoch_ms = None
         self.metadata = {}
         self.traps = []
 
     def clear(self):
         self.channels = {}
         self.datetime = None
+        self.datetime_utc = None
+        self.time_origin_epoch_ms = None
+        self.session_created_epoch_ms = None
         self.metadata = {}
         self.traps = []
 
